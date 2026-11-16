@@ -2,6 +2,28 @@
 
 namespace MistralAi.Agents.Models;
 
+
+public class FileTreeScanResult
+{
+   public required string RootPath { get; set; }
+   public required ScanMode Mode { get; set; }
+   public required int MaxDepth { get; set; }
+   public required FileSystemNode RootNode { get; set; }
+   public required int TotalFiles { get; set; }
+   public required int TotalDirectories { get; set; }
+   public required long TotalSize { get; set; }
+}
+
+public class ScanOptions
+{
+   public ScanMode Mode { get; set; } = ScanMode.BreadthFirst;
+   public int MaxDepth { get; set; } = int.MaxValue;
+   public bool IncludeFiles { get; set; } = true;
+   public bool IncludeDirectories { get; set; } = true;
+   public string[]? FilePatterns { get; set; } // e.g., ["*.txt", "*.json"]
+   public string[]? ExcludePatterns { get; set; } // e.g., ["node_modules", ".git"]
+}
+
 public class FileReadResult
 {
    public required string Content { get; set; }
@@ -61,23 +83,3 @@ public class FileSystemNode
    public int Depth { get; set; }
 }
 
-public class FileTreeScanResult
-{
-   public required string RootPath { get; set; }
-   public required ScanMode Mode { get; set; }
-   public required int MaxDepth { get; set; }
-   public required FileSystemNode RootNode { get; set; }
-   public required int TotalFiles { get; set; }
-   public required int TotalDirectories { get; set; }
-   public required long TotalSize { get; set; }
-}
-
-public class ScanOptions
-{
-   public ScanMode Mode { get; set; } = ScanMode.BreadthFirst;
-   public int MaxDepth { get; set; } = int.MaxValue;
-   public bool IncludeFiles { get; set; } = true;
-   public bool IncludeDirectories { get; set; } = true;
-   public string[]? FilePatterns { get; set; } // e.g., ["*.txt", "*.json"]
-   public string[]? ExcludePatterns { get; set; } // e.g., ["node_modules", ".git"]
-}
