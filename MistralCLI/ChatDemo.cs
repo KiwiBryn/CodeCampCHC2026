@@ -7,6 +7,13 @@ namespace SampleConsoleApp;
 
 public class ChatDemo(IMistralAiService mistralService)
 {
+   //private readonly Dictionary<string, Func<string, Task<object>>> _toolFunctions = new();
+   private List<ChatMessage> _messages = new();
+   private string _systemPrompt = "You are a helpful assistant with file system access and memory. You can read, write, and manage files and folders, and remember conversation context.";
+   private string _model = "mistral-large-latest";
+   private float _temperature = 0.7f;
+   private const string ContextFileName = "context.json";
+
    private readonly Dictionary<string, Func<string, Task<object>>> _toolFunctions = new()
    {
       ["scan_folder_tree"] = ScanFolderTreeAsync,
@@ -26,11 +33,19 @@ public class ChatDemo(IMistralAiService mistralService)
          // Load tools from JSON file
          var tools = await LoadToolsFromFileAsync("tools.json");
 
-         // Basic chat with file operations
-         await InteractiveChatWithToolsAsync(tools);
+         // Try to load previous context
+         await LoadContextAsync();
 
-         // Example of loading schema from file
-         await ExampleWithSchemaFromFileAsync();
+         Console.WriteLine("\n=== AI Assistant with Context ===");
+         Console.WriteLine("Available commands:");
+         Console.WriteLine("- /exit - Exit the application");
+         Console.WriteLine("- /save - Save current conversation context");
+         Console.WriteLine("- /clear - Clear conversation context (brain wipe)");
+         Console.WriteLine("- /help - Show this help message");
+         Console.WriteLine("\nType your message to start chatting...");
+
+         // Main chat loop
+         await InteractiveChatWithToolsAsync(tools);
       }
       catch (Exception ex)
       {
@@ -40,43 +55,32 @@ public class ChatDemo(IMistralAiService mistralService)
 
    private async Task InteractiveChatWithToolsAsync(List<Tool> tools)
    {
-      Console.WriteLine("\n=== Interactive Chat with File Operations ===");
-      Console.WriteLine("Type 'exit' to quit or 'help' for available commands.");
-
-      var messages = new List<ChatMessage>
-        {
-            new() { Role = MessageRole.System, Content = "You are a helpful assistant with file system access. You can read, write, and manage files and folders." }
-        };
-
       while (true)
       {
          Console.Write("\n> ");
          var input = Console.ReadLine();
 
-         if (string.Equals(input, "exit", StringComparison.OrdinalIgnoreCase))
-            break;
+         if (string.IsNullOrWhiteSpace(input))
+            continue;
 
-         if (string.Equals(input, "help", StringComparison.OrdinalIgnoreCase))
+         // Handle special commands
+         if (input.StartsWith("/"))
          {
-            Console.WriteLine("Available commands:");
-            Console.WriteLine("- List files: 'list files in [path]'");
-            Console.WriteLine("- Read file: 'read [filename]'");
-            Console.WriteLine("- Write file: 'write to [filename] content [text]'");
-            Console.WriteLine("- Create folder: 'create folder [path]'");
-            Console.WriteLine("- Delete file: 'delete file [filename]'");
-            Console.WriteLine("- Delete folder: 'delete folder [path]'");
+            await HandleCommandAsync(input);
             continue;
          }
 
-         messages.Add(new ChatMessage { Role = MessageRole.User, Content = input });
+         // Add user message to context
+         _messages.Add(new ChatMessage { Role = MessageRole.User, Content = input });
 
+         // Prepare request
          var request = new ChatCompletionRequest
          {
-            Model = "mistral-large-latest",
-            Messages = messages,
+            Model = _model,
+            Messages = _messages,
             Tools = tools,
             ToolChoice = ToolChoice.Auto,
-            Temperature = 0.7f
+            Temperature = _temperature
          };
 
          try
@@ -85,15 +89,14 @@ public class ChatDemo(IMistralAiService mistralService)
 
             if (response.Choices[0].Message.ToolCalls is { Count: > 0 })
             {
-               messages.Add(response.Choices[0].Message);
-               await ProcessToolCallsAsync(
-                   response.Choices[0].Message.ToolCalls, messages);
+               // Handle tool calls
+               await ProcessToolCallsAsync(response.Choices[0].Message.ToolCalls, tools);
             }
             else
             {
                // Regular response
                Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
-               messages.Add(response.Choices[0].Message);
+               _messages.Add(response.Choices[0].Message);
             }
          }
          catch (Exception ex)
@@ -103,10 +106,111 @@ public class ChatDemo(IMistralAiService mistralService)
       }
    }
 
-   private async Task ProcessToolCallsAsync(List<ToolCall>? toolCalls, List<ChatMessage> messages)
+   private async Task HandleCommandAsync(string command)
    {
-      if (toolCalls is not { Count: > 0 }) return;
+      var cmd = command.Trim().ToLower();
 
+      switch (cmd)
+      {
+         case "/exit":
+            await SaveContextAsync();
+            Console.WriteLine("Goodbye!");
+            Environment.Exit(0);
+            break;
+
+         case "/save":
+            await SaveContextAsync();
+            Console.WriteLine("Context saved to context.json");
+            break;
+
+         case "/clear":
+            _messages.Clear();
+            _messages.Add(new ChatMessage { Role = MessageRole.System, Content = _systemPrompt });
+            Console.WriteLine("Conversation context cleared (brain wipe performed).");
+            break;
+
+         case "/help":
+            Console.WriteLine("\nAvailable commands:");
+            Console.WriteLine("- /exit - Exit the application");
+            Console.WriteLine("- /save - Save current conversation context");
+            Console.WriteLine("- /clear - Clear conversation context (brain wipe)");
+            Console.WriteLine("- /help - Show this help message");
+            Console.WriteLine("\nType your message to continue chatting...");
+            break;
+
+         default:
+            Console.WriteLine($"Unknown command: {command}. Type /help for available commands.");
+            break;
+      }
+   }
+
+   private async Task LoadContextAsync()
+   {
+      if (!File.Exists(ContextFileName))
+      {
+         // Initialize with system prompt
+         _messages.Add(new ChatMessage { Role = MessageRole.System, Content = _systemPrompt });
+         return;
+      }
+
+      try
+      {
+         var json = await File.ReadAllTextAsync(ContextFileName);
+         var context = JsonSerializer.Deserialize<ChatContext>(json);
+
+         if (context != null)
+         {
+            _systemPrompt = context.SystemPrompt ?? _systemPrompt;
+            _messages = context.Messages;
+            _model = context.Model;
+            _temperature = context.Temperature;
+
+            // Ensure we have at least the system prompt
+            if (!_messages.Any(m => m.Role == MessageRole.System))
+            {
+               _messages.Insert(0, new ChatMessage { Role = MessageRole.System, Content = _systemPrompt });
+            }
+
+            Console.WriteLine($"Loaded context from {ContextFileName} (last updated: {context.LastUpdated:g})");
+            Console.WriteLine($"Model: {_model}, Temperature: {_temperature}");
+         }
+      }
+      catch (Exception ex)
+      {
+         Console.WriteLine($"Warning: Could not load context - {ex.Message}");
+         _messages.Add(new ChatMessage { Role = MessageRole.System, Content = _systemPrompt });
+      }
+   }
+
+   private async Task SaveContextAsync()
+   {
+      try
+      {
+         var context = new ChatContext
+         {
+            SystemPrompt = _systemPrompt,
+            Messages = _messages,
+            Model = _model,
+            Temperature = _temperature,
+            LastUpdated = DateTimeOffset.Now
+         };
+
+         var json = JsonSerializer.Serialize(context, new JsonSerializerOptions
+         {
+            WriteIndented = true,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+         });
+
+         await File.WriteAllTextAsync(ContextFileName, json);
+      }
+      catch (Exception ex)
+      {
+         Console.WriteLine($"Error saving context: {ex.Message}");
+      }
+   }
+
+   private async Task ProcessToolCallsAsync(List<ToolCall> toolCalls, List<Tool> tools)
+   {
       foreach (var toolCall in toolCalls)
       {
          if (toolCall.Function == null) continue;
@@ -115,12 +219,12 @@ public class ChatDemo(IMistralAiService mistralService)
          {
             try
             {
-               // Parse arguments (simplified - in production use proper JSON parsing)
+               // Parse arguments
                var result = await func(toolCall.Function.Arguments);
                var resultJson = JsonSerializer.Serialize(result);
 
                // Add tool response to messages
-               messages.Add(new ChatMessage
+               _messages.Add(new ChatMessage
                {
                   Role = MessageRole.Tool,
                   Content = resultJson,
@@ -131,7 +235,7 @@ public class ChatDemo(IMistralAiService mistralService)
             }
             catch (Exception ex)
             {
-               messages.Add(new ChatMessage
+               _messages.Add(new ChatMessage
                {
                   Role = MessageRole.Tool,
                   Content = $"Error: {ex.Message}",
@@ -145,19 +249,23 @@ public class ChatDemo(IMistralAiService mistralService)
       // After processing tools, get another response from the model
       var request = new ChatCompletionRequest
       {
-         Model = "mistral-large-latest",
-         Messages = messages,
-         Tools = await LoadToolsFromFileAsync("tools.json"),
+         Model = _model,
+         Messages = _messages,
+         Tools = tools,
          ToolChoice = ToolChoice.Auto,
-         Temperature = 0.7f
+         Temperature = _temperature
       };
 
-      var messagesText = JsonSerializer.Serialize(messages);
-
-      var response = await mistralService.CreateChatCompletionAsync(request);
-      Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
-      messages.Add(response.Choices[0].Message);
-      await ProcessToolCallsAsync(response.Choices[0].Message.ToolCalls, messages);
+      try
+      {
+         var response = await mistralService.CreateChatCompletionAsync(request);
+         Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
+         _messages.Add(response.Choices[0].Message);
+      }
+      catch (Exception ex)
+      {
+         Console.WriteLine($"Error getting response: {ex.Message}");
+      }
    }
 
    private async Task ExampleWithSchemaFromFileAsync()
