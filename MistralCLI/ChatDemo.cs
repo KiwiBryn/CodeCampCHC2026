@@ -1,6 +1,7 @@
 ﻿using MistralAi.Agents.Models;
 using MistralAi.Agents.Services;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SampleConsoleApp;
 
@@ -194,18 +195,42 @@ public class ChatDemo(IMistralAiService mistralService)
 
    #region File System Operations
 
-   private static Task<object> ScanFolderTreeAsync(string arguments)
+   private static async Task<object> ScanFolderTreeAsync(string arguments)
    {
       var args = JsonSerializer.Deserialize<Dictionary<string, object>>(arguments);
       var folderPath = args?["folderPath"] as string ?? throw new ArgumentException("folderPath is required");
 
       // Parse options with defaults
       var options = new ScanOptions();
+
+      // Try to load default ignore lists from file
+      try
+      {
+         if (File.Exists("scan_ignore.json"))
+         {
+            var ignoreJson = await File.ReadAllTextAsync("scan_ignore.json");
+            var ignoreConfig = JsonSerializer.Deserialize<ScanOptions>(ignoreJson);
+
+            if (ignoreConfig != null)
+            {
+               options.IgnoreFolders = ignoreConfig.IgnoreFolders ?? options.IgnoreFolders;
+               options.IgnoreFiles = ignoreConfig.IgnoreFiles ?? options.IgnoreFiles;
+               options.IgnoreExtensions = ignoreConfig.IgnoreExtensions ?? options.IgnoreExtensions;
+            }
+         }
+      }
+      catch
+      {
+         // If we can't load the ignore file, just continue with defaults
+      }
+
+      // Override with any options from the arguments
       if (args != null)
       {
-         if (args.TryGetValue("mode", out var modeObj) && modeObj is string modeStr &&
-             Enum.TryParse<ScanMode>(modeStr, true, out var mode))
+         if (args.TryGetValue("mode", out var modeObj) && modeObj is string modeStr)
          {
+            if (!Enum.TryParse<ScanMode>(modeStr, true, out var mode) || !Enum.IsDefined(mode))
+               throw new ArgumentException($"Invalid scan mode: {modeStr}");
             options.Mode = mode;
          }
          if (args.TryGetValue("maxDepth", out var depthObj) && depthObj is JsonElement depthElement)
@@ -219,33 +244,53 @@ public class ChatDemo(IMistralAiService mistralService)
                 .Where(s => !string.IsNullOrEmpty(s))
                 .ToArray();
          }
-         if (args.TryGetValue("excludePatterns", out var excludeObj) && excludeObj is JsonElement excludeElement)
+         if (args.TryGetValue("ignoreFolders", out var ignoreFoldersObj) && ignoreFoldersObj is JsonElement ignoreFoldersElement)
          {
-            options.ExcludePatterns = excludeElement.EnumerateArray()
+            var ignoreFolders = ignoreFoldersElement.EnumerateArray()
                 .Select(e => e.GetString() ?? "")
                 .Where(s => !string.IsNullOrEmpty(s))
                 .ToArray();
+            options.IgnoreFolders = options.IgnoreFolders?.Concat(ignoreFolders).Distinct().ToArray() ?? ignoreFolders;
+         }
+         if (args.TryGetValue("ignoreFiles", out var ignoreFilesObj) && ignoreFilesObj is JsonElement ignoreFilesElement)
+         {
+            var ignoreFiles = ignoreFilesElement.EnumerateArray()
+                .Select(e => e.GetString() ?? "")
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToArray();
+            options.IgnoreFiles = options.IgnoreFiles?.Concat(ignoreFiles).Distinct().ToArray() ?? ignoreFiles;
+         }
+         if (args.TryGetValue("ignoreExtensions", out var ignoreExtObj) && ignoreExtObj is JsonElement ignoreExtElement)
+         {
+            var ignoreExtensions = ignoreExtElement.EnumerateArray()
+                .Select(e => e.GetString() ?? "")
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToArray();
+            options.IgnoreExtensions = options.IgnoreExtensions?.Concat(ignoreExtensions).Distinct().ToArray() ?? ignoreExtensions;
+         }
+         if (args.TryGetValue("caseSensitive", out var caseSensitiveObj) && caseSensitiveObj is JsonElement caseElement)
+         {
+            options.CaseSensitive = caseElement.GetBoolean();
          }
       }
 
-            if (!Directory.Exists(folderPath))
-               throw new DirectoryNotFoundException($"Directory not found: {folderPath}");
+      if (!Directory.Exists(folderPath))
+         throw new DirectoryNotFoundException($"Directory not found: {folderPath}");
 
-            var (rootNode, totalFiles, totalDirs, totalSize) = BuildFileTree(folderPath, options);
+      var (rootNode, totalFiles, totalDirs, totalSize) = BuildFileTree(folderPath, options);
 
-            return Task.FromResult<object>(new FileTreeScanResult
-            {
-               RootPath = folderPath,
-               Mode = options.Mode,
-               MaxDepth = options.MaxDepth,
-               RootNode = rootNode,
-               TotalFiles = totalFiles,
-               TotalDirectories = totalDirs,
-               TotalSize = totalSize
-            });
-         }
-
-         private Task<object> GetFileTreeAsync(string arguments) => ScanFolderTreeAsync(arguments);
+      return new FileTreeScanResult
+      {
+         RootPath = folderPath,
+         Mode = options.Mode,
+         MaxDepth = options.MaxDepth,
+         RootNode = rootNode,
+         TotalFiles = totalFiles,
+         TotalDirectories = totalDirs,
+         TotalSize = totalSize
+      };
+   }
+   private Task<object> GetFileTreeAsync(string arguments) => ScanFolderTreeAsync(arguments);
 
          private static (FileSystemNode, int, int, long) BuildFileTree(string rootPath, ScanOptions options)
          {
@@ -262,88 +307,17 @@ public class ChatDemo(IMistralAiService mistralService)
             var totalDirs = 1; // Count the root directory
             var totalSize = 0L;
 
-            if (options.Mode == ScanMode.Flat)
+            if (options.Mode is ScanMode.Flat or ScanMode.BreadthFirst)
             {
-               // Simple flat scan
-               ProcessDirectoryFlat(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
-            }
-            else if (options.Mode == ScanMode.BreadthFirst)
-            {
-               // Breadth-first scan
                ProcessDirectoryBreadthFirst(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
             }
-            else // DepthFirst
+            else
             {
-               // Depth-first scan
                ProcessDirectoryDepthFirst(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
             }
 
             return (rootNode, totalFiles, totalDirs, totalSize);
          }
-
-         private static void ProcessDirectoryFlat(
-             string currentPath,
-             FileSystemNode currentNode,
-             ScanOptions options,
-             ref int totalFiles,
-             ref int totalDirs,
-             ref long totalSize)
-         {
-            try
-      {
-         if (options.IncludeDirectories)
-         {
-            foreach (var dir in Directory.GetDirectories(currentPath))
-            {
-               if (ShouldExclude(dir, options.ExcludePatterns)) continue;
-
-               var dirInfo = new System.IO.DirectoryInfo(dir);
-               var dirNode = new FileSystemNode
-               {
-                  Name = dirInfo.Name,
-                  Path = dirInfo.FullName,
-                  IsDirectory = true,
-                  LastModified = dirInfo.LastWriteTime,
-                  Depth = currentNode.Depth + 1
-               };
-
-               if (currentNode.Children == null)
-                  currentNode.Children = new List<FileSystemNode>();
-               currentNode.Children.Add(dirNode);
-               totalDirs++;
-            }
-         }
-
-         if (options.IncludeFiles)
-         {
-            foreach (var file in Directory.GetFiles(currentPath))
-            {
-               if (!MatchesPatterns(file, options.FilePatterns)) continue;
-
-               var fileInfo = new System.IO.FileInfo(file);
-               var fileNode = new FileSystemNode
-               {
-                  Name = fileInfo.Name,
-                  Path = fileInfo.FullName,
-                  IsDirectory = false,
-                  Size = fileInfo.Length,
-                  LastModified = fileInfo.LastWriteTime,
-                  Depth = currentNode.Depth + 1
-               };
-
-               if (currentNode.Children == null)
-                  currentNode.Children = new List<FileSystemNode>();
-               currentNode.Children.Add(fileNode);
-               totalFiles++;
-               totalSize += fileInfo.Length;
-            }
-         }
-      }
-      catch (UnauthorizedAccessException)
-      {
-         // Skip directories we don't have access to
-      }
-   }
 
    private static void ProcessDirectoryBreadthFirst(
        string rootPath,
@@ -353,6 +327,7 @@ public class ChatDemo(IMistralAiService mistralService)
        ref int totalDirs,
        ref long totalSize)
    {
+      var maxDepth = options.Mode == ScanMode.Flat ? 1 : options.MaxDepth;
       var queue = new Queue<(string Path, FileSystemNode Node, int CurrentDepth)>();
       queue.Enqueue((rootPath, rootNode, 0));
 
@@ -360,7 +335,7 @@ public class ChatDemo(IMistralAiService mistralService)
       {
          var (currentPath, currentNode, currentDepth) = queue.Dequeue();
 
-         if (currentDepth >= options.MaxDepth) continue;
+         if (currentDepth >= maxDepth) continue;
 
          try
          {
@@ -368,7 +343,7 @@ public class ChatDemo(IMistralAiService mistralService)
             {
                foreach (var dir in Directory.GetDirectories(currentPath))
                {
-                  if (ShouldExclude(dir, options.ExcludePatterns)) continue;
+                  if (ShouldIgnore(dir, true, options)) continue;
 
                   var dirInfo = new System.IO.DirectoryInfo(dir);
                   var dirNode = new FileSystemNode
@@ -393,7 +368,8 @@ public class ChatDemo(IMistralAiService mistralService)
             {
                foreach (var file in Directory.GetFiles(currentPath))
                {
-                  if (!MatchesPatterns(file, options.FilePatterns)) continue;
+                  if (ShouldIgnore(file, false, options)) continue;
+                  if (!MatchesPatterns(file, options.FilePatterns, options)) continue;
 
                   var fileInfo = new System.IO.FileInfo(file);
                   var fileNode = new FileSystemNode
@@ -437,7 +413,7 @@ public class ChatDemo(IMistralAiService mistralService)
          {
             foreach (var dir in Directory.GetDirectories(currentPath))
             {
-               if (ShouldExclude(dir, options.ExcludePatterns)) continue;
+               if (ShouldIgnore(dir, true, options)) continue;
 
                var dirInfo = new System.IO.DirectoryInfo(dir);
                var dirNode = new FileSystemNode
@@ -469,7 +445,8 @@ public class ChatDemo(IMistralAiService mistralService)
          {
             foreach (var file in Directory.GetFiles(currentPath))
             {
-               if (!MatchesPatterns(file, options.FilePatterns)) continue;
+               if (ShouldIgnore(file, false, options)) continue;
+               if (!MatchesPatterns(file, options.FilePatterns, options)) continue;
 
                var fileInfo = new System.IO.FileInfo(file);
                var fileNode = new FileSystemNode
@@ -496,44 +473,117 @@ public class ChatDemo(IMistralAiService mistralService)
       }
    }
 
-   private static bool ShouldExclude(string path, string[]? excludePatterns)
+   private static bool ShouldIgnore(string path, bool isDirectory, ScanOptions options)
    {
-      if (excludePatterns == null || excludePatterns.Length == 0)
-         return false;
-
-      var pathParts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-      foreach (var pattern in excludePatterns)
+      // Check folder ignore list
+      if (isDirectory && options.IgnoreFolders != null)
       {
-         if (pathParts.Any(p => p.Equals(pattern, StringComparison.OrdinalIgnoreCase)))
+         var folderName = Path.GetFileName(path);
+         if (options.IgnoreFolders.Contains(folderName, options.CaseSensitive
+             ? StringComparer.Ordinal
+             : StringComparer.OrdinalIgnoreCase))
+         {
+            return true;
+         }
+
+         // Check if any parent folder is in ignore list
+         var pathParts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+         foreach (var ignoreFolder in options.IgnoreFolders)
+         {
+            if (pathParts.Contains(ignoreFolder, options.CaseSensitive
+                ? StringComparer.Ordinal
+                : StringComparer.OrdinalIgnoreCase))
+            {
+               return true;
+            }
+         }
+      }
+
+      // Check file ignore list
+      if (!isDirectory && options.IgnoreFiles != null)
+      {
+         var fileName = Path.GetFileName(path);
+         if (options.IgnoreFiles.Contains(fileName, options.CaseSensitive
+             ? StringComparer.Ordinal
+             : StringComparer.OrdinalIgnoreCase))
          {
             return true;
          }
       }
+
+      // Check extension ignore list
+      if (!isDirectory && options.IgnoreExtensions != null)
+      {
+         var ext = Path.GetExtension(path).TrimStart('.');
+         if (options.IgnoreExtensions.Contains(ext, options.CaseSensitive
+             ? StringComparer.Ordinal
+             : StringComparer.OrdinalIgnoreCase))
+         {
+            return true;
+         }
+      }
+
+      // Check exclude patterns (legacy support)
+      if (options.ExcludePatterns != null && options.ExcludePatterns.Length > 0)
+      {
+         var pathParts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+         foreach (var pattern in options.ExcludePatterns)
+         {
+            if (pathParts.Contains(pattern, options.CaseSensitive
+                ? StringComparer.Ordinal
+                : StringComparer.OrdinalIgnoreCase))
+            {
+               return true;
+            }
+         }
+      }
+
       return false;
    }
 
-   private static bool MatchesPatterns(string filePath, string[]? filePatterns)
+   private static bool MatchesPatterns(string filePath, string[]? filePatterns, ScanOptions options)
    {
       if (filePatterns == null || filePatterns.Length == 0)
          return true;
 
       var fileName = Path.GetFileName(filePath);
+      var ext = Path.GetExtension(filePath).TrimStart('.');
+
       foreach (var pattern in filePatterns)
       {
-         if (pattern == "*") return true;
-
          try
          {
-            // Simple pattern matching (for *.ext patterns)
+            if (pattern == "*") return true;
+
+            // Handle extension patterns (e.g., "*.txt")
             if (pattern.StartsWith("*."))
             {
-               var ext = pattern[1..];
-               if (fileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+               var patternExt = pattern[2..]; // Remove "*." prefix
+               if (ext.Equals(patternExt, options.CaseSensitive
+                   ? StringComparison.Ordinal
+                   : StringComparison.OrdinalIgnoreCase))
+               {
                   return true;
+               }
             }
-            else if (fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+            // Handle full file name patterns
+            else if (fileName.Equals(pattern, options.CaseSensitive
+                ? StringComparison.Ordinal
+                : StringComparison.OrdinalIgnoreCase))
             {
                return true;
+            }
+            // Handle patterns with wildcards (simplified)
+            else if (pattern.Contains('*'))
+            {
+               // Convert to regex pattern
+               var regexPattern = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+               if (Regex.IsMatch(fileName, regexPattern, options.CaseSensitive
+                   ? RegexOptions.None
+                   : RegexOptions.IgnoreCase))
+               {
+                  return true;
+               }
             }
          }
          catch
@@ -543,7 +593,6 @@ public class ChatDemo(IMistralAiService mistralService)
       }
       return false;
    }
-
 
    private static async Task<object> ReadTextFileAsync(string arguments)
    {

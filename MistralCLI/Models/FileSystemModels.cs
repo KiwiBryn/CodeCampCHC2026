@@ -20,8 +20,12 @@ public class ScanOptions
    public int MaxDepth { get; set; } = int.MaxValue;
    public bool IncludeFiles { get; set; } = true;
    public bool IncludeDirectories { get; set; } = true;
-   public string[]? FilePatterns { get; set; } // e.g., ["*.txt", "*.json"]
-   public string[]? ExcludePatterns { get; set; } // e.g., ["node_modules", ".git"]
+   public string[]? FilePatterns { get; set; }
+   public string[]? ExcludePatterns { get; set; }
+   public string[]? IgnoreFolders { get; set; }  // Folders to completely ignore
+   public string[]? IgnoreFiles { get; set; }    // Specific files to ignore
+   public string[]? IgnoreExtensions { get; set; } // File extensions to ignore
+   public bool CaseSensitive { get; set; } = false;
 }
 
 public class FileReadResult
