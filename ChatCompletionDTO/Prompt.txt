@@ -1,0 +1,3 @@
+﻿Generate a C# v14 .NET 10 client library for this yaml. Generate typed DTOs with generated code serialisation.
+
+Generate a C# .NET 10 client library for this yaml. Generate typed DTOs with generated code serialisation.case very important

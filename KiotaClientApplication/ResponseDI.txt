@@ -1,0 +1,46 @@
+﻿type thinking
+thinking Microsoft.Kiota.Abstractions.Serialization.UntypedArray
+closed True
+type text
+text Here is a complete .NET 10 console application using dependency injection, polymorphism, and async/await:
+
+**HelloWorld.csproj**
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+</Project>
+```
+
+**Program.cs**
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddSingleton<IGreetingService, GreetingService>();
+
+await using var provider = services.BuildServiceProvider();
+var greeter = provider.GetRequiredService<IGreetingService>();
+await greeter.GreetAsync();
+
+public interface IGreetingService
+{
+    Task GreetAsync();
+}
+
+public sealed class GreetingService : IGreetingService
+{
+    public async Task GreetAsync() =>
+        await Console.Out.WriteLineAsync("hello world");
+}
+```
+
+Run with `dotnet run`. The `IGreetingService` interface provides polymorphism, the DI container manages the lifecycle, and `WriteLineAsync` performs the I/O asynchronously.
+Press any key to exit...

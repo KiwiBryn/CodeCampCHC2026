@@ -1,0 +1,77 @@
+﻿Mistral AI Chat Console
+Enter your messages (blank line to exit):
+----------------------------------------
+You: .NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions) ensure correct case on on payload DTOs. User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest.
+AI: Here's a concise C# 14 (.NET 10) console application that meets your requirements:
+
+```csharp
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+
+var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY") ?? throw new InvalidOperationException("MISTRAL_API_KEY not set");
+var model = Environment.GetEnvironmentVariable("MISTRAL_MODEL") ?? "mistral-medium-latest";
+var systemMessage = await File.ReadAllTextAsync("system.md");
+
+var client = new HttpClient
+{
+    BaseAddress = new Uri("https://api.mistral.ai/v1/"),
+    DefaultRequestHeaders = { { "Authorization", $"Bearer {apiKey}" } }
+};
+
+Console.WriteLine("Chat with Mistral (press Enter on empty line to exit)");
+while (true)
+{
+    Console.Write("> ");
+    var userInput = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(userInput)) break;
+
+    var response = await client.PostAsJsonAsync("chat/completions", new
+    {
+        model,
+        messages = new[]
+        {
+            new { role = "system", content = systemMessage },
+            new { role = "user", content = userInput }
+        }
+    });
+
+    response.EnsureSuccessStatusCode();
+    var result = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>();
+
+    Console.WriteLine($"{result?.choices?[0]?.message?.content}\n");
+}
+
+public record ChatCompletionResponse(
+    string id,
+    string model,
+    Choice[] choices,
+    Usage usage);
+
+public record Choice(
+    int index,
+    Message message,
+    string? finishReason);
+
+public record Message(
+    string role,
+    string content);
+
+public record Usage(
+    int promptTokens,
+    int completionTokens,
+    int totalTokens);
+```
+
+Key points:
+1. Uses proper PascalCase for DTOs as per API spec
+2. Loads system message from system.md
+3. Uses environment variables for API key and model
+4. Exits on blank input
+5. Includes all required response DTOs with correct casing
+6. Uses C# 14 features (file-scoped namespace, records, etc.)
+
+Note: You'll need to add the `System.Net.Http.Json` package for the JSON extensions.
+You:

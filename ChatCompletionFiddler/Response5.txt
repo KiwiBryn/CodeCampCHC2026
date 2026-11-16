@@ -1,0 +1,88 @@
+﻿Chat with mistral-medium-latest (Enter blank line to exit)
+Type your message and press Enter...
+> >A client library for (https://api.mistral.ai/v1/chat/completions) using the openapi specification. Strongly typed DTOs. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest, with a sample console client application
+
+Here's a concise implementation of a Mistral AI client library with strongly typed DTOs, following your requirements:
+
+```csharp
+// DTOs
+public record ChatRequest(string Model, List<Message> Messages, float? Temperature = 0.7f);
+public record Message(string Role, string Content);
+public record ChatResponse(string Id, string Model, List<Choice> Choices);
+public record Choice(Message Message, int? Index, string? FinishReason);
+
+// Client
+public class MistralClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly string _apiKey;
+    private readonly string _model;
+
+    public MistralClient(HttpClient httpClient, IConfiguration config)
+    {
+        _httpClient = httpClient;
+        _apiKey = config["MISTRAL_API_KEY"] ?? throw new InvalidOperationException("MISTRAL_API_KEY not set");
+        _model = config["MISTRAL_MODEL"] ?? "mistral-medium-latest";
+        _httpClient.DefaultRequestHeaders.Authorization = new("Bearer", _apiKey);
+    }
+
+    public async Task<ChatResponse> ChatAsync(ChatRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            "https://api.mistral.ai/v1/chat/completions",
+            request);
+
+        return await response.EnsureSuccessStatusCode().Content.ReadFromJsonAsync<ChatResponse>()
+            ?? throw new InvalidOperationException("Empty response");
+    }
+}
+
+// Console App
+public class Program
+{
+    public static async Task Main()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddHttpClient<MistralClient>();
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<MistralClient>();
+
+        var systemMessage = await File.ReadAllTextAsync("system.md");
+        var messages = new List<Message> { new("system", systemMessage) };
+
+        while (true)
+        {
+            Console.Write("> ");
+            var input = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(input)) break;
+
+            messages.Add(new("user", input));
+            var response = await client.ChatAsync(new ChatRequest(client._model, messages));
+
+            Console.WriteLine(response.Choices[0].Message.Content);
+            messages.Add(response.Choices[0].Message);
+        }
+    }
+}
+```
+
+Key points:
+1. Strongly typed DTOs for request/response
+2. HttpClient with DI and async/await
+3. Configuration from environment variables
+4. System message loaded from file
+5. Interactive loop with blank line exit
+6. Default model handling
+7. Uses latest .NET features (records, file-based IO)
+
+To use:
+1. Set environment variables `MISTRAL_API_KEY` and optionally `MISTRAL_MODEL`
+2. Create a `system.md` file with your system message
+3. Run the console application
+
+Note: You'll need to add these NuGet packages:
+- Microsoft.Extensions.Hosting
+- Microsoft.Extensions.Http
+- System.Text.Json

@@ -1,0 +1,36 @@
+﻿Here's a simple .NET 10 console application that displays "Hello, World!" using the latest C# features and best practices:
+
+```csharp
+Console.WriteLine("Hello, World!");
+```
+
+For a more structured approach with dependency injection (though minimal for this case):
+
+```csharp
+var builder = ConsoleApp.CreateBuilder(args);
+var app = builder.Build();
+
+app.AddCommand("hello", () =>
+{
+    Console.WriteLine("Hello, World!");
+    return Task.CompletedTask;
+});
+
+await app.RunAsync();
+```
+
+To run this:
+
+1. Create a new console project:
+```bash
+dotnet new console -n HelloWorldApp
+cd HelloWorldApp
+```
+
+2. Replace Program.cs with either version above
+
+3. Run with:
+```bash
+dotnet run -- hello
+```
+Press any key to exit...

@@ -1,0 +1,51 @@
+﻿.NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions). User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md
+
+.NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions) ensure correct case on on payload DTOs. User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md
+
+.NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions) ensure correct case on on payload DTOs. User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest. AddHttpResilience for requests
+
+.NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions) ensure correct case on on request and response payload DTOs. User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest
+
+
+.NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions) generate DTOs ensurec correct casing. User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest. AddHttpResilience for requests
+
+>A client library for (https://api.mistral.ai/v1/chat/completions) using the openapi specification. split strongly typed DTOs into streaming, synchronous, as shared. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest, with a sample console client application  
+
+
+A C#14 .NET 10client library for https://docs.mistral.ai/openapi.yaml using the openapi specification. split strongly typed DTOs (system, assistant, user and tool ) into streaming, synchronous, as shared. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-large-latest, with a sample console client application  
+
+
+A C#14 .NET 10 client library for https://docs.mistral.ai/openapi.yaml using the openapi specification. split strongly typed DTOs (system, assistant, user and tool ) into streaming, synchronous, as shared, use JSON code generation with descriminator.. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-large-latest, with a sample console client application
+
+
+---------------------
+A C#14 .NET 10 client library for https://docs.mistral.ai/openapi.yaml using the openapi specification. split strongly typed DTOs (system, assistant, user and tool ) into streaming, synchronous, as shared, use JSON code generation with descriminator. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest
+---------------------
+
+A C#14 .NET 10 client library for https://docs.mistral.ai/openapi.yaml using the openapi specification. split strongly typed DTOs into streaming, synchronous, as shared, use JSON code generation with descriminator. 
+
+A C#14 .NET 10 client library for https://docs.mistral.ai/openapi.yaml using the openapi specification. split strongly typed DTOs into streaming, synchronous, as shared, use JSON code generation with descriminator. Don't use NSWAG 
+
+openapi-generator-cli generate \
+  -i https://docs.mistral.ai/openapi.yaml \
+  -g csharp \
+  -o ./GeneratedClient \
+  --additional-properties=targetFramework=net10.0 \
+  --additional-properties=useCollection=true \
+  --additional-properties=useAsync=true \
+  --additional-properties=useDateTimeOffset=true \
+  --additional-properties=useCancellationToken=true \
+  --additional-properties=generateInterfaces=true \
+  --additional-properties=usePolymorphic=true \
+  --additional-properties=polymorphicDiscriminator=type \
+  --additional-properties=serializationLibrary=SystemTextJson \
+  --additional-properties=useJsonNaming=true \
+  --additional-properties=splitOperations=true \
+  --additional-properties=useHttpClient=true
+
+
+  
+  
+  Generate a C# v14 .NET 10 client library for this yaml. Generate typed DTOs with generated code serialisation.
+
+  Generate a C# .NET 10 client library for this yaml. Generate typed DTOs with generated code serialisation.Case much match

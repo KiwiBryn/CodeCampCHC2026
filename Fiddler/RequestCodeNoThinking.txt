@@ -1,0 +1,1 @@
+.NET 10 C#14 console application that calls the Mistral AI chat completion API, handles user input in a loop, and exits when a blank line is entered. Just code no thinking

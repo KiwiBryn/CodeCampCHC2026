@@ -1,0 +1,20 @@
+﻿Back to           SMALL yaml file example
+
+In the notes there was a reference to a small yaml file example. 
+
+Bugger link broken on 
+
+https://apievangelist.com/
+
+but 
+
+using my "leet" google-fu sorry bing I found on a slightly different url
+
+https://github.com/api-evangelist/mistral-ai/blob/main/openapi/mistral-ai-chat-completions-api-openapi.yml
+
+// Add user message to conversation
+messages.Add(new ChatMessage("user", userInput));
+
+string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-openapi.yml");
+
+messages.Add(new ChatMessage("user", yaml));

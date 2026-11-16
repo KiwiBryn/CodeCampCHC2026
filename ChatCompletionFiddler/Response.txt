@@ -1,0 +1,175 @@
+﻿Mistral chat (mistral-medium-latest)
+Type a message and press Enter. Blank line to quit.
+
+>.NET 10 C#14 console application that calls chat completion API (https://api.mistral.ai/v1/chat/completions) ensure correct case on on request and response payload DTOs. User input processed in loop,that exits when a blank line is entered. Load Chat Completion API System Message from file system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest
+# .NET 10 C# 14 Console Application for Mistral Chat Completion API
+
+Here's a complete implementation of a console application that meets your requirements:
+
+```csharp
+using System;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+// DTOs for the Mistral API
+public record ChatCompletionRequest(
+    [property: JsonPropertyName("model")] string Model,
+    [property: JsonPropertyName("messages")] ChatMessage[] Messages,
+    [property: JsonPropertyName("temperature")] float? Temperature = null,
+    [property: JsonPropertyName("max_tokens")] int? MaxTokens = null,
+    [property: JsonPropertyName("stream")] bool? Stream = null
+);
+
+public record ChatMessage(
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("content")] string Content
+);
+
+public record ChatCompletionResponse(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("object")] string Object,
+    [property: JsonPropertyName("created")] long Created,
+    [property: JsonPropertyName("model")] string Model,
+    [property: JsonPropertyName("choices")] Choice[] Choices,
+    [property: JsonPropertyName("usage")] Usage Usage
+);
+
+public record Choice(
+    [property: JsonPropertyName("index")] int Index,
+    [property: JsonPropertyName("message")] ChatMessage Message,
+    [property: JsonPropertyName("finish_reason")] string FinishReason
+);
+
+public record Usage(
+    [property: JsonPropertyName("prompt_tokens")] int PromptTokens,
+    [property: JsonPropertyName("completion_tokens")] int CompletionTokens,
+    [property: JsonPropertyName("total_tokens")] int TotalTokens
+);
+
+class Program
+{
+    private static readonly HttpClient _httpClient = new();
+    private const string ApiUrl = "https://api.mistral.ai/v1/chat/completions";
+    private const string DefaultModel = "mistral-medium-latest";
+    private const string SystemMessageFile = "system.md";
+
+    static async Task Main(string[] args)
+    {
+        // Validate API key
+        var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY");
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            Console.Error.WriteLine("MISTRAL_API_KEY environment variable is not set.");
+            return;
+        }
+
+        // Get model from environment or use default
+        var model = Environment.GetEnvironmentVariable("MISTRAL_MODEL") ?? DefaultModel;
+
+        // Load system message
+        string systemMessage;
+        try
+        {
+            systemMessage = await File.ReadAllTextAsync(SystemMessageFile);
+        }
+        catch (FileNotFoundException)
+        {
+            Console.Error.WriteLine($"System message file '{SystemMessageFile}' not found.");
+            return;
+        }
+
+        // Configure HTTP client
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        // Initialize conversation with system message
+        var messages = new List<ChatMessage>
+        {
+            new("system", systemMessage)
+        };
+
+        Console.WriteLine($"Chat with {model} (Enter blank line to exit)");
+        Console.WriteLine("Type your message and press Enter...");
+
+        // Main input loop
+        while (true)
+        {
+            Console.Write("> ");
+            var userInput = Console.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(userInput))
+                break;
+
+            // Add user message to conversation
+            messages.Add(new ChatMessage("user", userInput));
+
+            try
+            {
+                // Call API
+                var request = new ChatCompletionRequest(
+                    Model: model,
+                    Messages: messages.ToArray()
+                );
+
+                var response = await _httpClient.PostAsJsonAsync(ApiUrl, request);
+                response.EnsureSuccessStatusCode();
+
+                var completion = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>();
+
+                if (completion?.Choices?.FirstOrDefault()?.Message?.Content is { } assistantMessage)
+                {
+                    // Add assistant response to conversation
+                    messages.Add(new ChatMessage("assistant", assistantMessage));
+
+                    Console.WriteLine();
+                    Console.WriteLine(assistantMessage);
+                    Console.WriteLine();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+            }
+        }
+    }
+}
+```
+
+## Key Features:
+
+1. **Correct Case DTOs**: All request and response DTOs use the exact JSON property names from the Mistral API with `JsonPropertyName` attributes.
+
+2. **Environment Variables**:
+   - Requires `MISTRAL_API_KEY` to be set
+   - Optionally uses `MISTRAL_MODEL` (defaults to "mistral-medium-latest")
+
+3. **System Message**:
+   - Loads from `system.md` file in the application directory
+   - Included as the first message in the conversation
+
+4. **Input Loop**:
+   - Processes user input in a loop
+   - Exits when a blank line is entered
+   - Maintains conversation history
+
+5. **Error Handling**:
+   - Validates required environment variables
+   - Handles file not found for system message
+   - Catches and displays API errors
+
+## Usage:
+
+1. Create a `system.md` file with your system message
+2. Set the `MISTRAL_API_KEY` environment variable
+3. Optionally set `MISTRAL_MODEL` environment variable
+4. Run the application and start chatting
+
+The application will maintain the conversation context between turns, sending the full history with each request.
+
+>
+C:\Users\BrynLewis\source\repos\CHCCodeCamp2026\FiddlerChatCompletionAPI\bin\Debug\net10.0\FiddlerChatCompletionAPI.exe (process 32676) exited with code -1 (0xffffffff).
+To automatically close the console when debugging stops, enable Tools->Options->Debugging->Automatically close the console when debugging stops.
+Press any key to close this window . . .

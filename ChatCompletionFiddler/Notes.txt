@@ -1,0 +1,50 @@
+﻿Took a few more attempts to get this running. 
+
+Got it to comp[ile then was going pop with 422 errors.
+
+This generated JSON failed stared at it for a while, the realised it was case sensitivity. 
+
+My brain was so used to Json peoperies it didn't even occur to me that the API spec might be different.
+
+So I changed the property names to match the API spec. The API spec is not consistent with casing, so I had to pick one and stick with it.
+
+{
+   "Model": "mistral-small-latest",
+   "Messages": [
+      {
+         "Role": "system",
+         "Content": "You are a helpful, concise assistant that provides accurate information.\r\nIf you do not know the answer, say so rather than making something up.\r\nKeep responses brief and to the point."
+      },
+      {
+         "Role": "user",
+         "Content": "explain database acid"
+      }
+   ],
+   "Temperature": 0.7,
+   "Max_tokens": 1024,
+   "Stream": false
+}
+
+Tried lots of prompts then realised the API spec that the model had been trained on was not "complete" and was missing some of the properties I needed.
+
+Manually add a few properties slow and painful process with 422 debugging. Though, got better at spotting issues and fixing them.
+
+Fix appearance of useage numbers
+
+public record Usage(
+    [property: JsonPropertyName("prompt_tokens")] int PromptTokens,
+    [property: JsonPropertyName("completion_tokens")] int CompletionTokens,
+    [property: JsonPropertyName("total_tokens")] int TotalTokens
+);
+
+Tokens used: Prompt=2383, Completion=126, Total=2509
+
+Quiet good it added xml project file and rqd. NuGets
+
+For some unknown reason regressed to static main method. Not sure why, but it was a pain to fix.
+
+But, it did generated "public class MistralClient" which sort of extracted the API calls from the console app. So, I guess that was a good thing.
+
+Didn't have IMistralClient but good start for a first attempt.
+
+At this point was sick of half-arsed DTOs so yaml journey began. 

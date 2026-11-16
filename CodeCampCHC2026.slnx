@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/0.Fiddler-Sync/">
+    <File Path="Fiddler/PowerShellRequest.json" />
+    <File Path="Fiddler/PowerShellResponse.txt" />
+    <File Path="Fiddler/requestACID.json" />
+    <File Path="Fiddler/RequestCode.json" />
+    <File Path="Fiddler/RequestCodeNoThinking.txt" />
+    <File Path="Fiddler/responseACID.md" />
+    <File Path="Fiddler/ResponseCode.txt" />
+    <File Path="Notes.txt" />
+  </Folder>
+  <Project Path="ChatCompletionDTO/3.ChatCompletionDTO.csproj" Id="cc47d51f-ef4a-4dca-996b-ff99fcbfda0e" />
+  <Project Path="ChatCompletionFiddler/2.ChatCompletionFiddler.csproj" Id="f63aeda2-1b57-4063-81a2-8261f3687a32" />
+  <Project Path="FiddlerChatCompletionAPI/1.FiddlerChatCompletionAPI.csproj" />
+  <Project Path="KiotaClientApplication/4b.KiotaClientApplication.csproj" Id="bc34652e-6974-4532-a5df-15ba61bb36b9" />
+  <Project Path="KiotaClientLibrary/4a.KiotaClientLibrary.csproj" Id="e933a95a-2134-4c13-9091-fab4a7d5572c" />
+  <Project Path="MistralCLI/MistralCLI.csproj" />
+  <Project Path="YAMLClientApplication/5b.YAMLClientApplication.csproj" Id="18426dca-a7f3-4a39-8844-484a3665af2d" />
+  <Project Path="YAMLClientLibrary/5a.YAMLClientLibrary.csproj" Id="81e4f9d0-6f9b-4b25-9e2a-ae8ce05796f4" />
+</Solution>

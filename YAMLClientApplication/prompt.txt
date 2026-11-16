@@ -1,0 +1,14 @@
+﻿Generate a C# .NET 10 client library for this yaml. Generate typed DTOs with generated code serialisation.case very important
+
+A complete C#14 .NET 10 client library for this yaml using this openapi specification . split strongly typed DTOs (system, assistant, user and tool ) into streaming, synchronous, as shared, use JSON code generation with descriminator.. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest
+
+
+
+A complete C#14 .NET 10 client library for this yaml openapi specification, User input processed in loop, that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest
+
+
+A complete C#14 .NET 10 client library for this yaml openapi specification
+
+A complete C#14 .NET 10 client library for this yaml openapi specification
+
+A C#14 .NET 10 client library for this yaml openapi specification. the strongly typed DTOs (system, assistant, user and tool )into streaming, synchronous, as shared into seperate files. No sample console application initially

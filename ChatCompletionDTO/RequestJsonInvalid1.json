@@ -1,0 +1,14 @@
+{
+   "model": "mistral-medium-latest",
+   "messages": [
+      {
+         "role": "system",
+         "content": "You are a helpful, concise assistant that provides accurate information.\r\nIf you do not know the answer, say so rather than making something up.\r\nKeep responses brief and to the point.\r\nUse .NET C#14 10 for code examples. Use dependency injection and async/await where appropriate. Use the latest .NET features and best practices.polymorhic "
+      },
+      {
+         "role": "user",
+         "content": "explain database term ACID"
+      }
+   ],
+   "stream": false
+}

@@ -1,0 +1,72 @@
+﻿Kiota so much code, had to isntall tooling starting to get away from "spirt of session" and "keep it simple" and "just do it in C#14 .NET 10 console app".
+
+But, Kiota from Microsoft.
+
+kiota generate ^
+  --language CSharp ^
+  --class-name MistralChatCompletionClient ^
+  --namespace-name Mistral ^
+  --openapi mistral-openapi.yaml ^
+  --output Generated ^
+  --include-path "/v1/chat/completions
+
+  Used big file but could get it to generate code for just the chat completion API.
+
+  Client was comprehensive but overwhelming, lots of tricky C# syntax and patterns to learn, but good to see how Microsoft does it.
+
+  Good levels of abstraction, but also lots of code to get through. Bonus was that it generated a sample console application to use the client library.
+  
+  Which had tools supported by Kiota, but not needed for my simple console application. But some useful code for tools buildout in later slides
+
+  var request = new ChatCompletionRequest
+{
+   //Model = "mistral-large-latest",
+   Model = "mistral-small-latest",
+
+   Messages =
+    [
+     ...
+   ToolChoice = new ChatCompletionRequest.ChatCompletionRequest_tool_choice
+   {
+      ToolChoiceEnum = ToolChoiceEnum.Auto
+   },
+
+   Tools = new List<CustomConnector>
+   {
+     new CustomConnector
+        {
+            AdditionalData = new Dictionary<string, object>
+            {
+                ["type"] = "function",
+                ["function"] = new Dictionary<string, object>
+                {
+                    ["name"] = "get_weather",
+                    ["description"] = "Get current weather for a location",
+                    ["parameters"] = new Dictionary<string, object>
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new Dictionary<string, object>
+                        {
+                            ["location"] = new Dictionary<string, object>
+                            {
+                                ["type"] = "string",
+                                ["description"] = "City name"
+                            }
+                        },
+                        ["required"] = new string[] { "location" }
+                    }
+                }
+            }
+        } 
+   }
+};
+
+But loading of System.md disappeared from the generated code. So I hard coded the system message into the console application.
+
+The while loop for user input and exit on blank line was also missing from the generated code. Didn't bother add in wanted to keep it simple and this session is capped to 55mins
+
+Tried generating DI code, but it was too much for my simple console application. 
+
+So I just used the generated client library and used the sample program.cs with a couple of changes to add the system message from System.md and to display the token usage at the end of the conversation.
+
+This option worked well, but the generated code was a bit overwhelming for my simple console application.

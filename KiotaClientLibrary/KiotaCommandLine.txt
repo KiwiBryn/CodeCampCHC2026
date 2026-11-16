@@ -1,0 +1,7 @@
+﻿kiota generate ^
+  --language CSharp ^
+  --class-name MistralChatCompletionClient ^
+  --namespace-name Mistral ^
+  --openapi mistral-openapi.yaml ^
+  --output Generated ^
+  --include-path "/v1/chat/completions

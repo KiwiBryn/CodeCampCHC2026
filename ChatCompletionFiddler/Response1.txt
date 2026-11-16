@@ -1,0 +1,204 @@
+﻿Mistral chat (mistral-small-latest)
+Type a message and press Enter. Blank line to quit.
+
+>.NET 10 C#14 console application that calls (https://api.mistral.ai/v1/chat/completions).User input processed in loop, that exits when a blank line is entered. Load Chat Completion API System Message from file system.md. Use typed DTOs for request and response
+# .NET 10 C#14 Console Application for Mistral AI API
+
+Here's a complete console application that:
+- Uses .NET 10 and C# 14
+- Calls the Mistral AI chat completions API
+- Processes user input in a loop until a blank line is entered
+- Loads the system message from a file
+- Uses typed DTOs
+- Implements HTTP resilience with Polly
+
+## Program.cs
+
+```csharp
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
+using Polly;
+using Polly.Retry;
+
+var builder = ConsoleApp.CreateBuilder(args);
+
+// Configure HTTP client with resilience
+builder.Services.AddHttpClient("MistralClient")
+    .AddStandardResilienceHandler(options =>
+    {
+        options.Retry = new RetryStrategyOptions
+        {
+            MaxRetryAttempts = 3,
+            Delay = TimeSpan.FromSeconds(1),
+            BackoffType = DelayBackoffType.Exponential,
+            ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>()
+        };
+
+        options.CircuitBreaker = new CircuitBreakerStrategyOptions
+        {
+            BreakDuration = TimeSpan.FromSeconds(30),
+            ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>()
+        };
+    });
+
+builder.Services.AddSingleton<MistralApiClient>();
+builder.Services.AddSingleton<SystemMessageLoader>();
+
+var app = builder.Build();
+
+// Register services
+app.Services.GetRequiredService<SystemMessageLoader>();
+var client = app.Services.GetRequiredService<MistralApiClient>();
+
+// Main loop
+Console.WriteLine("Mistral AI Chat Console (Enter blank line to exit)");
+Console.WriteLine("------------------------------------------------");
+
+while (true)
+{
+    Console.Write("\nYou: ");
+    var userInput = Console.ReadLine();
+
+    if (string.IsNullOrWhiteSpace(userInput))
+    {
+        Console.WriteLine("Exiting...");
+        break;
+    }
+
+    try
+    {
+        var response = await client.GetChatCompletionAsync(userInput);
+        Console.WriteLine($"Mistral: {response.Choices[0].Message.Content}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+    }
+}
+
+public class MistralApiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly string _apiKey;
+    private readonly string _systemMessage;
+
+    public MistralApiClient(IHttpClientFactory httpClientFactory, SystemMessageLoader systemMessageLoader)
+    {
+        _httpClient = httpClientFactory.CreateClient("MistralClient");
+        _apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY")
+                  ?? throw new InvalidOperationException("MISTRAL_API_KEY environment variable not set");
+
+        _systemMessage = systemMessageLoader.LoadSystemMessage();
+    }
+
+    public async Task<ChatCompletionResponse> GetChatCompletionAsync(string userMessage)
+    {
+        var request = new ChatCompletionRequest
+        {
+            Model = "mistral-tiny",
+            Messages = new List<Message>
+            {
+                new Message { Role = "system", Content = _systemMessage },
+                new Message { Role = "user", Content = userMessage }
+            },
+            Temperature = 0.7f,
+            MaxTokens = 1000,
+            TopP = 1.0f
+        };
+
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var response = await _httpClient.PostAsJsonAsync("https://api.mistral.ai/v1/chat/completions", request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ChatCompletionResponse>()
+               ?? throw new InvalidOperationException("No response received");
+    }
+}
+
+public class SystemMessageLoader
+{
+    private readonly string _filePath;
+
+    public SystemMessageLoader()
+    {
+        _filePath = Path.Combine(AppContext.BaseDirectory, "system_message.md");
+    }
+
+    public string LoadSystemMessage()
+    {
+        if (!File.Exists(_filePath))
+        {
+            throw new FileNotFoundException($"System message file not found at {_filePath}");
+        }
+
+        return File.ReadAllText(_filePath);
+    }
+}
+
+// DTOs
+public record ChatCompletionRequest(
+    string Model,
+    List<Message> Messages,
+    float Temperature,
+    int MaxTokens,
+    float TopP);
+
+public record Message(string Role, string Content);
+
+public record ChatCompletionResponse(
+    string Id,
+    string Object,
+    int Created,
+    string Model,
+    List<Choice> Choices,
+    Usage Usage);
+
+public record Choice(
+    int Index,
+    Message Message,
+    object? Logprobs,
+    string FinishReason);
+
+public record Usage(
+    int PromptTokens,
+    int CompletionTokens,
+    int TotalTokens);
+```
+
+## system_message.md
+
+Create a file named `system_message.md` in the same directory as your executable with your system message content. For example:
+
+```
+You are a helpful assistant that provides concise and accurate answers.
+```
+
+## How to Use
+
+1. Set your Mistral API key as an environment variable:
+   ```bash
+   export MISTRAL_API_KEY=your_api_key_here  # Linux/macOS
+   setx MISTRAL_API_KEY your_api_key_here     # Windows
+   ```
+
+2. Run the application:
+   ```bash
+   dotnet run
+   ```
+
+3. Enter your messages one by one. The application will exit when you enter a blank line.
+
+## Features
+
+- **Resilience**: Uses Polly for retry and circuit breaker patterns
+- **DTOs**: Strongly typed request/response objects
+- **Configuration**: System message loaded from file
+- **Error Handling**: Basic error handling for API calls
+- **.NET 10**: Uses latest .NET features
+
+The application will automatically handle transient failures and retry failed requests according to the configured policies.

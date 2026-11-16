@@ -1,0 +1,35 @@
+﻿Code compiled second attempt
+
+quickly moving on from fiddler pain to first sort of functional chat client. 
+
+But momento style brain wipe as no context, genrated code quality low prompts long and verbose,
+
+some much cruft to illlustrate the point included at top of program.cs
+
+The "thinking" like below in first attempt was huge
+
+I'll use a JsonSerializerContext for good practice, or just JsonDocument
+Actually JsonDocument is simplest for reading response
+For request, build with anonymous type or a record + context. I'll use a small request DTO with JsonSerializerContext to be modern
+
+I tried different models with varying success. The medium model is the best for now, but the small model is faster and cheaper. 
+
+//const string DefaultModel = "mistral-small-latest";
+const string DefaultModel = "mistral-medium-latest";
+//const string DefaultModel = "mistral-large-latest";
+//const string DefaultModel = "codestral-latest";
+
+The large model is too slow and expensive for my needs. 
+
+It also caused the response parsing to go pop. Didn't bother investigating, just switched back to medium model.
+
+Copy and paste from console window much easier that than trying to read from fiddler.
+
+Initial responses in mark-down which was fine
+
+Found had to be very specific kept on wanting to use .NET 8 etc.
+
+A C#14 .NET 10 client library for https://docs.mistral.ai/openapi.yaml using the openapi specification. split strongly typed DTOs (system, assistant, user and tool ) into streaming, synchronous, as shared, use JSON code generation with descriminator.. User input processed in loop,that exits when a blank line is entered. System Message from system.md. APIKey Environment variable MISTRAL_API_KEY must be set. Model can be set in code, or via environment variable MISTRAL_MODEL. Default model is mistral-medium-latest
+
+
+
