@@ -1,0 +1,20 @@
+{
+   "type": "object",
+   "properties": {
+      "analysis": {
+         "type": "string",
+         "description": "The analysis of the data"
+      },
+      "key_findings": {
+         "type": "array",
+         "items": { "type": "string" },
+         "description": "List of key findings"
+      },
+      "recommendations": {
+         "type": "array",
+         "items": { "type": "string" },
+         "description": "List of recommendations"
+      }
+   },
+   "required": [ "analysis", "key_findings", "recommendations" ]
+}

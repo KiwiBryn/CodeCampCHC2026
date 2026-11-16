@@ -104,5 +104,46 @@
             "required": [ "folderPath" ]
          }
       }
+   },
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "scan_folder_tree",
+         "Description": "Scan a folder and return a hierarchical file tree structure. Supports breadth-first and depth-first scanning modes.",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "folderPath": {
+                  "type": "string",
+                  "description": "The path to the folder to scan"
+               },
+               "mode": {
+                  "type": "string",
+                  "enum": [ "Flat", "BreadthFirst", "DepthFirst" ],
+                  "description": "Scanning mode: Flat (single level), BreadthFirst (level by level), DepthFirst (branch by branch)",
+                  "default": "BreadthFirst"
+               },
+               "maxDepth": {
+                  "type": "integer",
+                  "description": "Maximum depth to scan (0 = root only, 1 = root + immediate children, etc.)",
+                  "default": 10,
+                  "minimum": 0
+               },
+               "filePatterns": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Array of file patterns to include (e.g., [\"*.txt\", \"*.json\"])",
+                  "default": null
+               },
+               "excludePatterns": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Array of directory patterns to exclude (e.g., [\"node_modules\", \".git\"])",
+                  "default": null
+               }
+            },
+            "required": [ "folderPath" ]
+         }
+      }
    }
 ]
