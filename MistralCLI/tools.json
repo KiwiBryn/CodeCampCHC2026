@@ -1,0 +1,108 @@
+[
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "read_text_file",
+         "Description": "Read the content of a text file",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "filePath": {
+                  "type": "string",
+                  "description": "The path to the file to read"
+               }
+            },
+            "required": [ "filePath" ]
+         }
+      }
+   },
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "write_text_file",
+         "Description": "Write content to a text file",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "filePath": {
+                  "type": "string",
+                  "description": "The path to the file to write"
+               },
+               "content": {
+                  "type": "string",
+                  "description": "The content to write to the file"
+               }
+            },
+            "required": [ "filePath", "content" ]
+         }
+      }
+   },
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "scan_folder",
+         "Description": "Scan a folder and list its contents",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "folderPath": {
+                  "type": "string",
+                  "description": "The path to the folder to scan"
+               }
+            },
+            "required": [ "folderPath" ]
+         }
+      }
+   },
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "delete_file",
+         "Description": "Delete a file",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "filePath": {
+                  "type": "string",
+                  "description": "The path to the file to delete"
+               }
+            },
+            "required": [ "filePath" ]
+         }
+      }
+   },
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "delete_folder",
+         "Description": "Delete a folder and its contents",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "folderPath": {
+                  "type": "string",
+                  "description": "The path to the folder to delete"
+               }
+            },
+            "required": [ "folderPath" ]
+         }
+      }
+   },
+   {
+      "Type": 0,
+      "Function": {
+         "Name": "create_folder",
+         "Description": "Create a new folder",
+         "Parameters": {
+            "type": "object",
+            "properties": {
+               "folderPath": {
+                  "type": "string",
+                  "description": "The path to the folder to create"
+               }
+            },
+            "required": [ "folderPath" ]
+         }
+      }
+   }
+]
