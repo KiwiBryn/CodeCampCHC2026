@@ -1,18 +1,23 @@
 ﻿using MistralAi.Agents.Models;
 using MistralAi.Agents.Services;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace SampleConsoleApp;
 
-public class ChatDemo(IMistralAiService mistralService)
+public class ChatDemo
 {
-   //private readonly Dictionary<string, Func<string, Task<object>>> _toolFunctions = new();
+   private readonly IMistralAiService mistralService;
    private List<ChatMessage> _messages = new();
    private string _systemPrompt = "You are a helpful assistant with file system access and memory. You can read, write, and manage files and folders, and remember conversation context.";
    private string _model = "mistral-large-latest";
    private float _temperature = 0.7f;
    private const string ContextFileName = "context.json";
+   private readonly Dictionary<string, Skill> _loadedSkills = new();
+   private readonly string _skillsDirectory = "skills";
+   private readonly string _skillsManifestFile = "skills.json";
 
    private readonly Dictionary<string, Func<string, Task<object>>> _toolFunctions = new()
    {
@@ -25,11 +30,23 @@ public class ChatDemo(IMistralAiService mistralService)
       ["create_folder"] = CreateFolderAsync
    };
 
+   public ChatDemo(IMistralAiService mistralService)
+   {
+      this.mistralService = mistralService;
+      // Initialize skills directory if it doesn't exist
+      if (!Directory.Exists(_skillsDirectory))
+      {
+         Directory.CreateDirectory(_skillsDirectory);
+      }
+
+   }
 
    public async Task RunAsync()
    {
       try
       {
+         await LoadSkillsManifestAsync();
+
          // Load tools from JSON file
          var tools = await LoadToolsFromFileAsync("tools.json");
 
@@ -87,10 +104,10 @@ public class ChatDemo(IMistralAiService mistralService)
          {
             var response = await mistralService.CreateChatCompletionAsync(request);
 
-            if (response.Choices[0].Message.ToolCalls is { Count: > 0 })
+            if (response.Choices[0].Message.ToolCalls is { Count: > 0 } toolCalls)
             {
-               // Handle tool calls
-               await ProcessToolCallsAsync(response.Choices[0].Message.ToolCalls, tools);
+               _messages.Add(response.Choices[0].Message);
+               await ProcessToolCallsAsync(toolCalls, tools);
             }
             else
             {
@@ -108,7 +125,9 @@ public class ChatDemo(IMistralAiService mistralService)
 
    private async Task HandleCommandAsync(string command)
    {
-      var cmd = command.Trim().ToLower();
+      var parts = command.Trim().Split(' ', 2);
+      var cmd = parts[0].ToLower();
+      var arg = parts.Length > 1 ? parts[1] : string.Empty;
 
       switch (cmd)
       {
@@ -129,13 +148,16 @@ public class ChatDemo(IMistralAiService mistralService)
             Console.WriteLine("Conversation context cleared (brain wipe performed).");
             break;
 
+         case "/skill":
+            await HandleSkillCommandAsync(arg);
+            break;
+
+         case "/skills":
+            await ListSkillsAsync();
+            break;
+
          case "/help":
-            Console.WriteLine("\nAvailable commands:");
-            Console.WriteLine("- /exit - Exit the application");
-            Console.WriteLine("- /save - Save current conversation context");
-            Console.WriteLine("- /clear - Clear conversation context (brain wipe)");
-            Console.WriteLine("- /help - Show this help message");
-            Console.WriteLine("\nType your message to continue chatting...");
+            ShowHelp();
             break;
 
          default:
@@ -143,6 +165,248 @@ public class ChatDemo(IMistralAiService mistralService)
             break;
       }
    }
+
+   private void ShowHelp()
+   {
+      Console.WriteLine("\nAvailable commands:");
+      Console.WriteLine("- /exit - Exit the application");
+      Console.WriteLine("- /save - Save current conversation context");
+      Console.WriteLine("- /clear - Clear conversation context (brain wipe)");
+      Console.WriteLine("- /skill {filename} - Load/unload a skill (toggle)");
+      Console.WriteLine("- /skills - List all currently loaded skills");
+      Console.WriteLine("- /help - Show this help message");
+      Console.WriteLine("\nType your message to continue chatting...");
+   }
+
+   private async Task HandleSkillCommandAsync(string skillName)
+   {
+      if (string.IsNullOrWhiteSpace(skillName))
+      {
+         Console.WriteLine("Usage: /skill {filename} (without .json extension)");
+         return;
+      }
+
+      // Try with and without .json extension
+      var skillFiles = new[]
+      {
+        Path.Combine(_skillsDirectory, $"{skillName}.json"),
+        Path.Combine(_skillsDirectory, skillName)
+    };
+
+      string? skillFile = skillFiles.FirstOrDefault(File.Exists);
+
+      if (skillFile == null)
+      {
+         Console.WriteLine($"Skill file not found: {skillName}.json in {_skillsDirectory} directory");
+         return;
+      }
+
+      // Check if skill is already loaded
+      if (_loadedSkills.TryGetValue(skillName, out var existingSkill))
+      {
+         // Unload the skill
+         UnloadSkill(skillName);
+         Console.WriteLine($"Skill '{skillName}' unloaded from context.");
+      }
+      else
+      {
+         // Load the skill
+         try
+         {
+            var skill = await LoadSkillFromFileAsync(skillFile);
+            if (skill != null)
+            {
+               LoadSkill(skill);
+               Console.WriteLine($"Skill '{skill.Name}' loaded from {skillFile}");
+            }
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine($"Error loading skill: {ex.Message}");
+         }
+      }
+   }
+
+   private async Task ListSkillsAsync()
+   {
+      if (_loadedSkills.Count == 0)
+      {
+         Console.WriteLine("No skills currently loaded.");
+         return;
+      }
+
+      Console.WriteLine("\nLoaded Skills:");
+      foreach (var skill in _loadedSkills.Values)
+      {
+         Console.WriteLine($"- {skill.Name}: {skill.Description ?? "No description"}");
+      }
+   }
+
+   private async Task<Skill?> LoadSkillFromFileAsync(string filePath)
+   {
+      var json = await File.ReadAllTextAsync(filePath);
+      var options = new JsonSerializerOptions
+      {
+         PropertyNameCaseInsensitive = true,
+         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
+      };
+      var skill = JsonSerializer.Deserialize<Skill>(json, options);
+
+      if (skill != null)
+      {
+         skill.FileName = Path.GetFileNameWithoutExtension(filePath);
+         return skill;
+      }
+      return null;
+   }
+
+   private void LoadSkill(Skill skill)
+   {
+      // Store the skill
+      _loadedSkills[skill.Name] = skill;
+
+      // Apply skill configuration
+      if (skill.Temperature.HasValue)
+      {
+         _temperature = skill.Temperature.Value;
+      }
+
+      if (!string.IsNullOrEmpty(skill.SystemPrompt))
+      {
+         // Update or add system prompt
+         var systemMessage = _messages.FirstOrDefault(m => m.Role == MessageRole.System);
+         if (systemMessage != null)
+         {
+            systemMessage.Content = $"{systemMessage.Content}\n\n{skill.SystemPrompt}";
+         }
+         else
+         {
+            _messages.Insert(0, new ChatMessage
+            {
+               Role = MessageRole.System,
+               Content = $"{_systemPrompt}\n\n{skill.SystemPrompt}"
+            });
+         }
+      }
+
+      // Add skill messages to context
+      if (skill.Messages != null)
+      {
+         foreach (var message in skill.Messages)
+         {
+            if (!_messages.Any(m => m.Role == message.Role && m.Content == message.Content))
+            {
+               _messages.Add(message);
+            }
+         }
+      }
+
+      // Register skill tools
+      if (skill.Tools != null)
+      {
+         foreach (var tool in skill.Tools)
+         {
+            if (tool.Function != null && !string.IsNullOrEmpty(tool.Function.Name))
+            {
+               // Check if this tool is already registered
+               if (!_toolFunctions.ContainsKey(tool.Function.Name))
+               {
+                  // For now, we'll just add a placeholder. In a real implementation,
+                  // you'd want to dynamically register the actual function.
+                  _toolFunctions[tool.Function.Name] = async (args) =>
+                  {
+                     return new { error = $"Tool {tool.Function.Name} is not implemented" };
+                  };
+               }
+            }
+         }
+      }
+   }
+
+   private void UnloadSkill(string skillName)
+   {
+      if (!_loadedSkills.TryGetValue(skillName, out var skill))
+         return;
+
+      // Remove skill messages from context
+      if (skill.Messages != null)
+      {
+         foreach (var message in skill.Messages)
+         {
+            _messages.RemoveAll(m =>
+                m.Role == message.Role &&
+                m.Content == message.Content &&
+                m.ToolCalls == message.ToolCalls &&
+                m.ToolCallId == message.ToolCallId);
+         }
+      }
+
+      // Remove skill system prompt if it was added
+      if (!string.IsNullOrEmpty(skill.SystemPrompt))
+      {
+         var systemMessage = _messages.FirstOrDefault(m => m.Role == MessageRole.System);
+         if (systemMessage != null)
+         {
+            var content = systemMessage.Content switch
+            {
+               string text => text,
+               JsonElement { ValueKind: JsonValueKind.String } element => element.GetString()!,
+               _ => throw new InvalidOperationException("The system message must contain text to unload a skill.")
+            };
+            systemMessage.Content = content.Replace(skill.SystemPrompt, "").Trim();
+         }
+      }
+
+      // Remove skill tools
+      if (skill.Tools != null)
+      {
+         foreach (var tool in skill.Tools)
+         {
+            if (tool.Function != null)
+            {
+               _toolFunctions.Remove(tool.Function.Name);
+            }
+         }
+      }
+
+      // Remove from loaded skills
+      _loadedSkills.Remove(skillName);
+   }
+
+   private async Task LoadSkillsManifestAsync()
+   {
+      var manifestPath = Path.Combine(_skillsDirectory, _skillsManifestFile);
+      if (!File.Exists(manifestPath))
+         return;
+
+      try
+      {
+         var json = await File.ReadAllTextAsync(manifestPath);
+         var manifest = JsonSerializer.Deserialize<SkillManifest>(json);
+
+         if (manifest?.DefaultSkills != null)
+         {
+            foreach (var skillName in manifest.DefaultSkills)
+            {
+               var skillFile = Path.Combine(_skillsDirectory, $"{skillName}.json");
+               if (File.Exists(skillFile))
+               {
+                  var skill = await LoadSkillFromFileAsync(skillFile);
+                  if (skill != null)
+                  {
+                     LoadSkill(skill);
+                     Console.WriteLine($"Loaded default skill: {skill.Name}");
+                  }
+               }
+            }
+         }
+      }
+      catch (Exception ex)
+      {
+         Console.WriteLine($"Warning: Could not load skills manifest - {ex.Message}");
+      }
+   }
+
 
    private async Task LoadContextAsync()
    {
@@ -258,47 +522,16 @@ public class ChatDemo(IMistralAiService mistralService)
 
       try
       {
-         var response = await mistralService.CreateChatCompletionAsync(request);
-         Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
-         _messages.Add(response.Choices[0].Message);
+            var response = await mistralService.CreateChatCompletionAsync(request);
+            Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
+            _messages.Add(response.Choices[0].Message);
+            if (response.Choices[0].Message.ToolCalls is { Count: > 0 } nextToolCalls)
+               await ProcessToolCallsAsync(nextToolCalls, tools);
+         }
+         catch (Exception ex)
+         {
+            Console.WriteLine($"Error getting response: {ex.Message}");
       }
-      catch (Exception ex)
-      {
-         Console.WriteLine($"Error getting response: {ex.Message}");
-      }
-   }
-
-   private async Task ExampleWithSchemaFromFileAsync()
-   {
-      Console.WriteLine("\n=== Example with Schema from File ===");
-
-      // Load a specific schema for structured output
-      var schema = await LoadSchemaFromFileAsync("output_schema.json");
-      if (schema == null) return;
-
-      var request = new ChatCompletionRequest
-      {
-         Model = "mistral-large-latest",
-         Messages =
-          [
-              new ChatMessage
-                {
-                    Role = MessageRole.System,
-                    Content = "You are a data analyst. Return responses in the specified JSON format."
-                },
-                new ChatMessage
-                {
-                    Role = MessageRole.User,
-                    Content = "Analyze the following data: Sales increased by 15% in Q2. Expenses decreased by 5%."
-                }
-          ],
-         ResponseFormat = new ResponseFormat { Type = ResponseFormatType.JsonObject },
-         Temperature = 0.3f
-      };
-
-      // If we had a way to pass schema to the model, we would do it here
-      // For now, we'll just show the schema was loaded
-      Console.WriteLine($"Using schema: {schema}");
    }
 
    #region File System Operations
@@ -398,34 +631,33 @@ public class ChatDemo(IMistralAiService mistralService)
          TotalSize = totalSize
       };
    }
-   private Task<object> GetFileTreeAsync(string arguments) => ScanFolderTreeAsync(arguments);
 
-         private static (FileSystemNode, int, int, long) BuildFileTree(string rootPath, ScanOptions options)
-         {
-            var rootNode = new FileSystemNode
-            {
-               Name = Path.GetFileName(rootPath) ?? rootPath,
-               Path = rootPath,
-               IsDirectory = true,
-               LastModified = Directory.GetLastWriteTime(rootPath),
-               Depth = 0
-            };
+   private static (FileSystemNode, int, int, long) BuildFileTree(string rootPath, ScanOptions options)
+   {
+      var rootNode = new FileSystemNode
+      {
+         Name = Path.GetFileName(rootPath) ?? rootPath,
+         Path = rootPath,
+         IsDirectory = true,
+         LastModified = Directory.GetLastWriteTime(rootPath),
+         Depth = 0
+      };
 
-            var totalFiles = 0;
-            var totalDirs = 1; // Count the root directory
-            var totalSize = 0L;
+      var totalFiles = 0;
+      var totalDirs = 1; // Count the root directory
+      var totalSize = 0L;
 
-            if (options.Mode is ScanMode.Flat or ScanMode.BreadthFirst)
-            {
-               ProcessDirectoryBreadthFirst(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
-            }
-            else
-            {
-               ProcessDirectoryDepthFirst(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
-            }
+      if (options.Mode is ScanMode.Flat or ScanMode.BreadthFirst)
+      {
+         ProcessDirectoryBreadthFirst(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
+      }
+      else
+      {
+         ProcessDirectoryDepthFirst(rootPath, rootNode, options, ref totalFiles, ref totalDirs, ref totalSize);
+      }
 
-            return (rootNode, totalFiles, totalDirs, totalSize);
-         }
+      return (rootNode, totalFiles, totalDirs, totalSize);
+   }
 
    private static void ProcessDirectoryBreadthFirst(
        string rootPath,
@@ -977,12 +1209,5 @@ public class ChatDemo(IMistralAiService mistralService)
             }
         };
    }
-
-   private async Task<string?> LoadSchemaFromFileAsync(string fileName)
-   {
-      if (!File.Exists(fileName)) return null;
-      return await File.ReadAllTextAsync(fileName);
-   }
-
    #endregion
 }
