@@ -13,12 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="mistral-ai-chat-completions-openapi.yml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <Using Include="System.Net.Http.Json" />
     <Using Include="System.Text.Json.Serialization" />
   </ItemGroup>
