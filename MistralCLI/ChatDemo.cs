@@ -12,9 +12,11 @@ public class ChatDemo
    private readonly IMistralAiService mistralService;
    private List<ChatMessage> _messages = new();
    private string _systemPrompt = "You are a helpful assistant with file system access and memory. You can read, write, and manage files and folders, and remember conversation context.";
-   private string _model = "mistral-large-latest";
+   private string _model = "mistral-medium-latest";
    private float _temperature = 0.7f;
+   private const int MaxToolRounds = 10;
    private const string ContextFileName = "context.json";
+   private string _systemFileName = "system.md";
    private readonly Dictionary<string, Skill> _loadedSkills = new();
    private readonly string _skillsDirectory = "skills";
    private readonly string _skillsManifestFile = "skills.json";
@@ -39,25 +41,32 @@ public class ChatDemo
          Directory.CreateDirectory(_skillsDirectory);
       }
 
+      if (File.Exists(_systemFileName))
+      {
+         _systemPrompt = File.ReadAllText(_systemFileName);
+      }
    }
 
    public async Task RunAsync()
    {
       try
       {
-         await LoadSkillsManifestAsync();
-
          // Load tools from JSON file
          var tools = await LoadToolsFromFileAsync("tools.json");
 
-         // Try to load previous context
+         // Load previous context first so default skills are applied on top of it
+         // (loading it afterwards would overwrite the skills' messages and settings)
          await LoadContextAsync();
+
+         await LoadSkillsManifestAsync();
 
          Console.WriteLine("\n=== AI Assistant with Context ===");
          Console.WriteLine("Available commands:");
          Console.WriteLine("- /exit - Exit the application");
          Console.WriteLine("- /save - Save current conversation context");
          Console.WriteLine("- /clear - Clear conversation context (brain wipe)");
+         Console.WriteLine("- /skills - Show available skills");
+         Console.WriteLine("- /skill <skill_name> - load or unload a skill");
          Console.WriteLine("- /help - Show this help message");
          Console.WriteLine("\nType your message to start chatting...");
 
@@ -112,7 +121,10 @@ public class ChatDemo
             else
             {
                // Regular response
-               Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
+               Console.WriteLine(GetText(response.Choices[0].Message.Content));
+
+               Console.WriteLine($"Token Usage Prompt:{response.Usage?.PromptTokens} Response:{response.Usage?.CompletionTokens} Total:{response.Usage?.TotalTokens}");
+
                _messages.Add(response.Choices[0].Message);
             }
          }
@@ -166,7 +178,24 @@ public class ChatDemo
       }
    }
 
-   private void ShowHelp()
+   /// <summary>
+   /// Extracts plain text from a message's Content, which may be a string, a JSON string,
+   /// or an array of content chunks ([{"type":"text","text":"..."}]). Using ToString() on a
+   /// JsonElement array/object returns raw JSON with escaped newlines and quotes.
+   /// </summary>
+   private static string GetText(object? content) => content switch
+   {
+      null => string.Empty,
+      string s => s,
+      JsonElement { ValueKind: JsonValueKind.String } e => e.GetString() ?? string.Empty,
+      JsonElement { ValueKind: JsonValueKind.Array } e => string.Concat(
+         e.EnumerateArray()
+          .Where(c => c.ValueKind == JsonValueKind.Object && c.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String)
+          .Select(c => c.GetProperty("text").GetString())),
+      _ => content.ToString() ?? string.Empty
+   };
+
+   private static void ShowHelp()
    {
       Console.WriteLine("\nAvailable commands:");
       Console.WriteLine("- /exit - Exit the application");
@@ -277,7 +306,12 @@ public class ChatDemo
          var systemMessage = _messages.FirstOrDefault(m => m.Role == MessageRole.System);
          if (systemMessage != null)
          {
-            systemMessage.Content = $"{systemMessage.Content}\n\n{skill.SystemPrompt}";
+            // Skip if already present (e.g. restored from a saved context)
+            var existing = GetText(systemMessage.Content);
+            if (!existing.Contains(skill.SystemPrompt))
+            {
+               systemMessage.Content = $"{existing}\n\n{skill.SystemPrompt}";
+            }
          }
          else
          {
@@ -347,13 +381,7 @@ public class ChatDemo
          var systemMessage = _messages.FirstOrDefault(m => m.Role == MessageRole.System);
          if (systemMessage != null)
          {
-            var content = systemMessage.Content switch
-            {
-               string text => text,
-               JsonElement { ValueKind: JsonValueKind.String } element => element.GetString()!,
-               _ => throw new InvalidOperationException("The system message must contain text to unload a skill.")
-            };
-            systemMessage.Content = content.Replace(skill.SystemPrompt, "").Trim();
+            systemMessage.Content = GetText(systemMessage.Content).Replace(skill.SystemPrompt, "").Trim();
          }
       }
 
@@ -473,13 +501,33 @@ public class ChatDemo
       }
    }
 
-   private async Task ProcessToolCallsAsync(List<ToolCall> toolCalls, List<Tool> tools)
+   private async Task ProcessToolCallsAsync(List<ToolCall> toolCalls, List<Tool> tools, int round = 1)
    {
       foreach (var toolCall in toolCalls)
       {
-         if (toolCall.Function == null) continue;
+         if (toolCall.Function == null)
+         {
+            // Every tool call needs a reply or the next request is rejected
+            _messages.Add(new ChatMessage
+            {
+               Role = MessageRole.Tool,
+               Content = "Error: tool call had no function.",
+               ToolCallId = toolCall.Id
+            });
+            continue;
+         }
 
-         if (_toolFunctions.TryGetValue(toolCall.Function.Name, out var func))
+         if (!_toolFunctions.TryGetValue(toolCall.Function.Name, out var func))
+         {
+            _messages.Add(new ChatMessage
+            {
+               Role = MessageRole.Tool,
+               Content = $"Error: unknown tool '{toolCall.Function.Name}'.",
+               ToolCallId = toolCall.Id
+            });
+            Console.WriteLine($"\nTool {toolCall.Function.Name} not found");
+         }
+         else
          {
             try
             {
@@ -510,6 +558,13 @@ public class ChatDemo
          }
       }
 
+      // Every tool call above has a reply, so stopping here leaves a valid history
+      if (round >= MaxToolRounds)
+      {
+         Console.WriteLine($"\nStopped after {MaxToolRounds} rounds of tool calls without a final answer. Send a message to continue.");
+         return;
+      }
+
       // After processing tools, get another response from the model
       var request = new ChatCompletionRequest
       {
@@ -522,15 +577,19 @@ public class ChatDemo
 
       try
       {
-            var response = await mistralService.CreateChatCompletionAsync(request);
-            Console.WriteLine($"\nAssistant: {response.Choices[0].Message.Content}");
-            _messages.Add(response.Choices[0].Message);
-            if (response.Choices[0].Message.ToolCalls is { Count: > 0 } nextToolCalls)
-               await ProcessToolCallsAsync(nextToolCalls, tools);
-         }
-         catch (Exception ex)
-         {
-            Console.WriteLine($"Error getting response: {ex.Message}");
+         var response = await mistralService.CreateChatCompletionAsync(request);
+
+         Console.WriteLine(GetText(response.Choices[0].Message.Content));
+
+         Console.WriteLine($"Token Usage Prompt:{response.Usage?.PromptTokens} Response:{response.Usage?.CompletionTokens} Total:{response.Usage?.TotalTokens}");
+
+         _messages.Add(response.Choices[0].Message);
+         if (response.Choices[0].Message.ToolCalls is { Count: > 0 } nextToolCalls)
+            await ProcessToolCallsAsync(nextToolCalls, tools, round + 1);
+      }
+      catch (Exception ex)
+      {
+         Console.WriteLine($"Error getting response: {ex.Message}");
       }
    }
 
@@ -538,8 +597,14 @@ public class ChatDemo
 
    private static async Task<object> ScanFolderTreeAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, object>>(arguments);
-      var folderPath = args?["folderPath"] as string ?? throw new ArgumentException("folderPath is required");
+      // Values must be JsonElement: deserializing to object yields JsonElement, never string
+      var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(arguments);
+      var folderPath = args != null && args.TryGetValue("folderPath", out var folderElement)
+         && folderElement.ValueKind == JsonValueKind.String
+            ? folderElement.GetString()
+            : null;
+      if (string.IsNullOrEmpty(folderPath))
+         throw new ArgumentException("folderPath is required");
 
       // Parse options with defaults
       var options = new ScanOptions();
@@ -560,16 +625,18 @@ public class ChatDemo
             }
          }
       }
-      catch
+      catch (Exception ex)
       {
-         // If we can't load the ignore file, just continue with defaults
+         // Continue with defaults, but don't hide the problem
+         Console.WriteLine($"Warning: could not load scan_ignore.json - {ex.Message}");
       }
 
       // Override with any options from the arguments
       if (args != null)
       {
-         if (args.TryGetValue("mode", out var modeObj) && modeObj is string modeStr)
+         if (args.TryGetValue("mode", out var modeObj) && modeObj.ValueKind == JsonValueKind.String)
          {
+            var modeStr = modeObj.GetString()!;
             if (!Enum.TryParse<ScanMode>(modeStr, true, out var mode) || !Enum.IsDefined(mode))
                throw new ArgumentException($"Invalid scan mode: {modeStr}");
             options.Mode = mode;
@@ -1009,6 +1076,12 @@ public class ChatDemo
       var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
       var filePath = args?["filePath"] ?? throw new ArgumentException("filePath is required");
 
+      Console.Write($"Delete file: {filePath} y/n");
+      if (Console.ReadLine()?.Trim().ToLower() != "y")
+      {
+         return new FileOperationResult { Success = false, Error = "Operation cancelled by user." };
+      }
+
       if (!File.Exists(filePath))
          throw new FileNotFoundException($"File not found: {filePath}");
 
@@ -1020,6 +1093,12 @@ public class ChatDemo
    {
       var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
       var folderPath = args?["folderPath"] ?? throw new ArgumentException("folderPath is required");
+
+      Console.Write($"Delete folder {folderPath} y/n");
+      if (Console.ReadLine()?.Trim().ToLower() != "y")
+      {
+         return new FileOperationResult { Success = false, Error = "Operation cancelled by user." };
+      }
 
       if (!Directory.Exists(folderPath))
          throw new DirectoryNotFoundException($"Directory not found: {folderPath}");
