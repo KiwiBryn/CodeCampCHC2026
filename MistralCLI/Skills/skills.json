@@ -1,0 +1,26 @@
+{
+   "skills": [
+      {
+         "name": "code-reviewer",
+         "file": "code-reviewer.json",
+         "description": "Helps with code review tasks"
+      },
+      {
+         "name": "data-analyst",
+         "file": "data-analyst.json",
+         "description": "Specialized in data analysis"
+      },
+      {
+         "name": "caveman",
+         "file": "caveman.json",
+         "description": "Terse caveman voice that removes fluff while preserving technical facts"
+      },
+      {
+         "name": "pirate",
+         "file": "pirate.json",
+         "description": "Pirate-themed coding help with clear, accurate technical guidance"
+      }
+
+   ],
+   "defaultSkills": [ "code-reviewer" ]
+}

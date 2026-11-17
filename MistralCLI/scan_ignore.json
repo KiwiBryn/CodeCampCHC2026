@@ -1,0 +1,45 @@
+{
+   "ignoreFolders": [
+      ".git",
+      ".vs",
+      "node_modules",
+      "bin",
+      "obj",
+      "Debug",
+      "Release",
+      "__pycache__",
+      ".vscode",
+      ".idea",
+      "packages",
+      "dist",
+      "build",
+      "temp",
+      "tmp"
+   ],
+   "ignoreFiles": [
+      ".DS_Store",
+      "Thumbs.db",
+      "desktop.ini",
+      "*.suo",
+      "*.user",
+      "*.userosscache",
+      "*.sln.docstates"
+   ],
+   "ignoreExtensions": [
+      "exe",
+      "dll",
+      "pdb",
+      "lib",
+      "obj",
+      "cache",
+      "log",
+      "bak",
+      "tmp",
+      "temp",
+      "msi",
+      "iso",
+      "img",
+      "bin",
+      "dat"
+   ]
+}

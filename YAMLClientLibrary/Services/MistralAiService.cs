@@ -27,16 +27,16 @@ public class MistralAiService : IMistralAiService
        ChatCompletionRequest request,
        CancellationToken cancellationToken = default)
    {
-      var response = await _httpClient.PostAsJsonAsync(
+      using var response = await _httpClient.PostAsJsonAsync(
           "chat/completions",
           request,
           _jsonOptions,
           cancellationToken)
           .ConfigureAwait(false);
 
-      response.EnsureSuccessStatusCode();
-
-      return await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(_jsonOptions, cancellationToken).ConfigureAwait(false);
+       await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+ 
+       return await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(_jsonOptions, cancellationToken).ConfigureAwait(false);
    }
 
    public async IAsyncEnumerable<ChatCompletionStreamResponse> CreateChatCompletionStreamAsync(
@@ -52,9 +52,9 @@ public class MistralAiService : IMistralAiService
       using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
           .ConfigureAwait(false);
 
-      response.EnsureSuccessStatusCode();
-
-      using var stream = await response.Content.ReadAsStreamAsync(cancellationToken)
+       await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+ 
+       using var stream = await response.Content.ReadAsStreamAsync(cancellationToken)
           .ConfigureAwait(false);
       using var reader = new StreamReader(stream);
       var eventData = new StringBuilder();
@@ -92,6 +92,17 @@ public class MistralAiService : IMistralAiService
 
       ChatCompletionStreamResponse DeserializeChunk(string data) =>
           JsonSerializer.Deserialize<ChatCompletionStreamResponse>(data, _jsonOptions)
-          ?? throw new JsonException("The Mistral streaming response contained an empty data event.");
-   }
-}
+                    ?? throw new JsonException("The Mistral streaming response contained an empty data event.");
+             }
+
+             private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+             {
+                if (response.IsSuccessStatusCode) return;
+
+                var details = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"Mistral API returned {(int)response.StatusCode} ({response.ReasonPhrase}): {details}",
+                    null,
+                    response.StatusCode);
+             }
+          }
