@@ -19,8 +19,13 @@
          "name": "pirate",
          "file": "pirate.json",
          "description": "Pirate-themed coding help with clear, accurate technical guidance"
+      },
+      {
+         "name": "dotnet",
+         "file": "dotnet.json",
+         "description": ".NET-themed coding help with clear, accurate technical guidance"
       }
 
    ],
-   "defaultSkills": [ "code-reviewer" ]
+   "defaultSkills": [ "dotnet" ]
 }
