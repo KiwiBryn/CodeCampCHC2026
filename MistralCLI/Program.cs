@@ -60,7 +60,7 @@ if (!string.IsNullOrWhiteSpace(configuredWorkingDirectory))
 }
 else
 {
-   // Auto-detect: climb from the current directory until we find a .csproj
+   // This is very simple auto-detection: it just climbs until it finds a .csproj. this is not a robust solution, but it works for the sample app. A more robust solution would be to use the MSBuild APIs to find the project root.
    var dir = new System.IO.DirectoryInfo(Directory.GetCurrentDirectory());
    while (dir is not null
        && dir.GetFiles("*.csproj", SearchOption.TopDirectoryOnly).Length == 0)
