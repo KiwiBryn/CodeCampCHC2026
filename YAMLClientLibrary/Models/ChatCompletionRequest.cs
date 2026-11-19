@@ -15,6 +15,9 @@ public class ChatCompletionRequest
    public float TopP { get; set; } = 1.0f;
    public int? MaxTokens { get; set; }
    public bool Stream { get; set; } = false;
+
+   [JsonPropertyName("stream_options")]
+   public StreamOptions? StreamOptions { get; set; }
    public OneOf<string, List<string>>? Stop { get; set; }
    public int? RandomSeed { get; set; }
 
@@ -34,6 +37,12 @@ public class ChatCompletionRequest
 
    [JsonPropertyName("safe_prompt")]
    public bool SafePrompt { get; set; } = false;
+}
+
+public class StreamOptions
+{
+   [JsonPropertyName("include_usage")]
+   public bool IncludeUsage { get; set; }
 }
 
 public class ResponseFormat

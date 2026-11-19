@@ -48,7 +48,7 @@ class Program
 {
    private static readonly HttpClient _httpClient = new();
    private const string ApiUrl = "https://api.mistral.ai/v1/chat/completions";
-   private const string DefaultModel = "mistral-medium-latest";
+   private const string DefaultModel = "mistral-small-latest";
    private const string SystemMessageFile = "system.md";
 
    static async Task Main(string[] args)
@@ -85,6 +85,10 @@ class Program
             new("system", systemMessage)
         };
 
+      string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-openapi.yml");
+
+      messages.Add(new ChatMessage("user", yaml));
+
       Console.WriteLine($"Chat with {model} (Enter blank line to exit)");
       Console.WriteLine("Type your message and press Enter...");
 
@@ -99,10 +103,6 @@ class Program
 
          // Add user message to conversation
          messages.Add(new ChatMessage("user", userInput));
-
-         string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-openapi.yml");
-
-         messages.Add(new ChatMessage("user", yaml));
 
          try
          {

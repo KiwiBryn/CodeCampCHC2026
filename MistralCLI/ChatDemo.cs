@@ -11,8 +11,8 @@ public class ChatDemo
 {
    private readonly IMistralAiService mistralService;
    private List<ChatMessage> _messages = new();
-   private string _systemPrompt = "You are a helpful assistant with file system access and memory. You can read, write, and manage files and folders, and remember conversation context.";
-   private string _model = "mistral-medium-latest";
+   private string _systemPrompt = "You are a helpful, concise assistant that provides accurate information.If you do not know the answer, say so rather than making something up.";
+   private string _model = "mistral-small-latest";
    private float _temperature = 0.7f;
    private const int MaxToolRounds = 10;
    private const string ContextFileName = "context.json";
@@ -45,6 +45,14 @@ public class ChatDemo
       {
          _systemPrompt = File.ReadAllText(_systemFileName);
       }
+
+      // Tell the model where it is, so it never needs a scan just to orient itself
+      _systemPrompt += $"Working directory: {Environment.CurrentDirectory}";
+
+      // And where the repository root is, so it never walks up the tree to find siblings
+      var repoRoot = FindRepositoryRoot(Environment.CurrentDirectory);
+      if (repoRoot != null)
+         _systemPrompt += $"Repository root: {repoRoot}";
    }
 
    public async Task RunAsync()
@@ -111,6 +119,7 @@ public class ChatDemo
 
          try
          {
+            /* This is the sync version that waits for the entire response before printing it, which can be slow for long responses or tool calls.
             var response = await mistralService.CreateChatCompletionAsync(request);
 
             if (response.Choices[0].Message.ToolCalls is { Count: > 0 } toolCalls)
@@ -126,6 +135,18 @@ public class ChatDemo
                Console.WriteLine($"Token Usage Prompt:{response.Usage?.PromptTokens} Response:{response.Usage?.CompletionTokens} Total:{response.Usage?.TotalTokens}");
 
                _messages.Add(response.Choices[0].Message);
+            }
+            */
+            var message = await CreateStreamingChatMessageAsync(request);
+
+            if (message.ToolCalls is { Count: > 0 } toolCalls)
+            {
+               _messages.Add(message);
+               await ProcessToolCallsAsync(toolCalls, tools);
+            }
+            else
+            {
+               _messages.Add(message);
             }
          }
          catch (Exception ex)
@@ -501,6 +522,77 @@ public class ChatDemo
       }
    }
 
+   /// <summary>
+   /// Streams a completion, printing content live as it arrives, and merges
+   /// streamed tool-call fragments (id/name on the first chunk for an index,
+   /// argument text in pieces afterwards) back into full ToolCall objects.
+   /// </summary>
+   private async Task<ChatMessage> CreateStreamingChatMessageAsync(ChatCompletionRequest request)
+   {
+      request.StreamOptions = new StreamOptions { IncludeUsage = true };
+
+      var contentBuilder = new System.Text.StringBuilder();
+      var toolCalls = new SortedDictionary<int, ToolCall>();
+      Usage? usage = null;
+
+      await foreach (var chunk in mistralService.CreateChatCompletionStreamAsync(request))
+      {
+         usage ??= chunk.Usage;
+
+         foreach (var choice in chunk.Choices)
+         {
+            var delta = choice.Delta;
+
+            if (delta.Content is { ValueKind: JsonValueKind.String } contentElement
+                && contentElement.GetString() is { } text && text.Length > 0)
+            {
+               Console.Write(text);
+               contentBuilder.Append(text);
+            }
+
+            if (delta.ToolCalls is { } fragments)
+            {
+               foreach (var fragment in fragments)
+               {
+                  if (!toolCalls.TryGetValue(fragment.Index, out var existing))
+                  {
+                     existing = new ToolCall
+                     {
+                        Id = fragment.Id,
+                        Type = ToolType.Function,
+                        Function = new FunctionCall { Name = fragment.Function?.Name ?? "", Arguments = "" }
+                     };
+                     toolCalls[fragment.Index] = existing;
+                  }
+                  if (!string.IsNullOrEmpty(fragment.Id))
+                     existing.Id = fragment.Id;
+                  if (!string.IsNullOrEmpty(fragment.Function?.Name))
+                     existing.Function!.Name = fragment.Function!.Name;
+                  if (!string.IsNullOrEmpty(fragment.Function?.Arguments))
+                     existing.Function!.Arguments += fragment.Function!.Arguments;
+               }
+            }
+         }
+      }
+
+      Console.WriteLine();
+      if (contentBuilder.Length > 0)
+         Console.WriteLine();
+
+      Console.WriteLine(
+          $"Token Usage Prompt:{usage?.PromptTokens} Response:{usage?.CompletionTokens} Total:{usage?.TotalTokens}");
+
+      var message = new ChatMessage
+      {
+         Role = MessageRole.Assistant,
+         Content = contentBuilder.ToString()
+      };
+      if (toolCalls.Count > 0)
+         message.ToolCalls = toolCalls.Values.ToList();
+
+      return message;
+   }
+
    private async Task ProcessToolCallsAsync(List<ToolCall> toolCalls, List<Tool> tools, int round = 1)
    {
       foreach (var toolCall in toolCalls)
@@ -577,6 +669,7 @@ public class ChatDemo
 
       try
       {
+         /*
          var response = await mistralService.CreateChatCompletionAsync(request);
 
          Console.WriteLine(GetText(response.Choices[0].Message.Content));
@@ -584,7 +677,12 @@ public class ChatDemo
          Console.WriteLine($"Token Usage Prompt:{response.Usage?.PromptTokens} Response:{response.Usage?.CompletionTokens} Total:{response.Usage?.TotalTokens}");
 
          _messages.Add(response.Choices[0].Message);
-         if (response.Choices[0].Message.ToolCalls is { Count: > 0 } nextToolCalls)
+         if (response.Choices[0].Message.ToolCalls is { Count: > 0 } nextToolCalls)* 
+         */
+         var message = await CreateStreamingChatMessageAsync(request);
+         _messages.Add(message);
+
+         if (message.ToolCalls is { Count: > 0 } nextToolCalls)
             await ProcessToolCallsAsync(nextToolCalls, tools, round + 1);
       }
       catch (Exception ex)
@@ -605,6 +703,8 @@ public class ChatDemo
             : null;
       if (string.IsNullOrEmpty(folderPath))
          throw new ArgumentException("folderPath is required");
+
+      Console.WriteLine($"Scanning folder tree at: {folderPath}");
 
       // Parse options with defaults
       var options = new ScanOptions();
@@ -687,16 +787,58 @@ public class ChatDemo
 
       var (rootNode, totalFiles, totalDirs, totalSize) = BuildFileTree(folderPath, options);
 
-      return new FileTreeScanResult
+      // Return a compact text tree instead of the full JSON node graph:
+      // the JSON form (with paths, sizes and timestamps per node) can cost
+      // tens of thousands of prompt tokens on a real repo, dominating latency.
+      return FormatFileTree(folderPath, rootNode, totalFiles, totalDirs);
+   }
+
+   private const int MaxTreeEntries = 400;
+
+   private static string FormatFileTree(
+       string rootPath, FileSystemNode root, int totalFiles, int totalDirs)
+   {
+      var sb = new System.Text.StringBuilder();
+      sb.AppendLine($"Root: {rootPath}");
+
+      var shown = 0;
+      var truncated = false;
+
+      // Classic ASCII tree:
+      //   +-- src/
+      //   |   +-- MistralCLI/
+      //   |       +-- Program.cs
+      //   +-- README.md
+      void Walk(FileSystemNode node, string prefix)
       {
-         RootPath = folderPath,
-         Mode = options.Mode,
-         MaxDepth = options.MaxDepth,
-         RootNode = rootNode,
-         TotalFiles = totalFiles,
-         TotalDirectories = totalDirs,
-         TotalSize = totalSize
-      };
+         if (truncated || node.Children == null) return;
+         for (var i = 0; i < node.Children.Count; i++)
+         {
+            var child = node.Children[i];
+            if (shown >= MaxTreeEntries)
+            {
+               truncated = true;
+               return;
+            }
+
+            var isLast = i == node.Children.Count - 1;
+            sb.AppendLine(prefix + (isLast ? "+-- " : "|-- ") + (child.IsDirectory ? child.Name + "/" : child.Name));
+            shown++;
+
+            if (child.IsDirectory)
+               Walk(child, prefix + (isLast ? "    " : "|   "));
+         }
+      }
+
+      Walk(root, "");
+
+      sb.AppendLine(
+          $"{totalFiles} files, {totalDirs} directories."
+          + (truncated
+              ? $" Output truncated after {MaxTreeEntries} entries; call scan_folder on a subfolder to expand it."
+              : string.Empty));
+
+      return sb.ToString();
    }
 
    private static (FileSystemNode, int, int, long) BuildFileTree(string rootPath, ScanOptions options)
@@ -906,15 +1048,25 @@ public class ChatDemo
          }
       }
 
-      // Check file ignore list
+      // Check file ignore list (supports ? and * wildcards, e.g. "*.suo")
       if (!isDirectory && options.IgnoreFiles != null)
       {
          var fileName = Path.GetFileName(path);
-         if (options.IgnoreFiles.Contains(fileName, options.CaseSensitive
-             ? StringComparer.Ordinal
-             : StringComparer.OrdinalIgnoreCase))
+         foreach (var ignoreFile in options.IgnoreFiles)
          {
-            return true;
+            if (ignoreFile.Contains('*') || ignoreFile.Contains('?'))
+            {
+               if (WildcardMatch(fileName, ignoreFile, options.CaseSensitive))
+               {
+                  return true;
+               }
+            }
+            else if (string.Equals(fileName, ignoreFile, options.CaseSensitive
+                ? StringComparison.Ordinal
+                : StringComparison.OrdinalIgnoreCase))
+            {
+               return true;
+            }
          }
       }
 
@@ -946,6 +1098,42 @@ public class ChatDemo
       }
 
       return false;
+   }
+
+   /// <summary>
+   /// Case-insensitive-by-default wildcard match supporting '*' (any run of chars)
+   /// and '?' (any single char). Classic two-pointer algorithm, no regex allocation.
+   /// </summary>
+   private static bool WildcardMatch(string input, string pattern, bool caseSensitive)
+   {
+      var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+      int s = 0, p = 0, starP = -1, starS = 0;
+
+      while (s < input.Length)
+      {
+         if (p < pattern.Length && (pattern[p] == '?' || string.Equals(input[s].ToString(), pattern[p].ToString(), comparison)))
+         {
+            s++;
+            p++;
+         }
+         else if (p < pattern.Length && pattern[p] == '*')
+         {
+            starP = p++;
+            starS = s;
+         }
+         else if (starP != -1)
+         {
+            p = starP + 1;
+            s = ++starS;
+         }
+         else
+         {
+            return false;
+         }
+      }
+
+      while (p < pattern.Length && pattern[p] == '*') p++;
+      return p == pattern.Length;
    }
 
    private static bool MatchesPatterns(string filePath, string[]? filePatterns, ScanOptions options)
@@ -1001,23 +1189,87 @@ public class ChatDemo
       return false;
    }
 
+   /// <summary>
+   /// Walks up from the start directory looking for a .sln or .git marker,
+   /// returning the repository root or null if none is found.
+   /// </summary>
+   private static string? FindRepositoryRoot(string startDirectory)
+   {
+      var current = new System.IO.DirectoryInfo(startDirectory);
+      while (current != null)
+      {
+         if (current.GetFiles("*.sln", SearchOption.TopDirectoryOnly).Length > 0
+             || current.GetDirectories(".git", SearchOption.TopDirectoryOnly).Length > 0)
+         {
+            return current.FullName;
+         }
+         current = current.Parent;
+      }
+      return null;
+   }
+
    private static async Task<object> ReadTextFileAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
-      var filePath = args?["filePath"] ?? throw new ArgumentException("filePath is required");
+      // Accept a single "filePath" or a "filePaths" array so the model can
+      // fetch everything it needs in one tool call instead of one round trip per file.
+      var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(arguments);
+      var paths = new List<string>();
 
-      if (!File.Exists(filePath))
-         throw new FileNotFoundException($"File not found: {filePath}");
+      if (args != null && args.TryGetValue("filePaths", out var pathsElement)
+          && pathsElement.ValueKind == JsonValueKind.Array)
+      {
+         paths.AddRange(pathsElement.EnumerateArray()
+             .Select(e => e.GetString())
+             .Where(s => !string.IsNullOrEmpty(s))!);
+      }
+      else if (args != null && args.TryGetValue("filePath", out var pathElement)
+          && pathElement.ValueKind == JsonValueKind.String)
+      {
+         paths.Add(pathElement.GetString()!);
+      }
 
-      var content = await File.ReadAllTextAsync(filePath);
-      return new FileReadResult { Content = content, FilePath = filePath };
+      if (paths.Count == 0)
+         throw new ArgumentException("filePath (string) or filePaths (array of strings) is required");
+
+      Console.WriteLine($"Reading file(s): {string.Join(", ", paths)}");
+
+      var results = new List<FileReadResult>();
+      foreach (var filePath in paths)
+      {
+         if (!File.Exists(filePath))
+            throw new FileNotFoundException($"File not found: {filePath}");
+
+         results.Add(new FileReadResult
+         {
+            Content = await File.ReadAllTextAsync(filePath),
+            FilePath = filePath
+         });
+      }
+
+      return results.Count == 1 ? results[0] : results;
+   }
+
+   /// <summary>
+   /// Extracts a string argument from a tool-call JSON payload. Deserializes to
+   /// JsonElement (not string) so unexpected numeric/boolean arguments the model
+   /// adds don't crash the whole tool call.
+   /// </summary>
+   private static string GetStringArgument(string arguments, string name)
+   {
+      var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(arguments);
+      return args is not null
+          && args.TryGetValue(name, out var element)
+          && element.ValueKind == JsonValueKind.String
+              ? element.GetString()!
+              : throw new ArgumentException($"{name} is required");
    }
 
    private static async Task<object> WriteTextFileAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
-      var filePath = args?["filePath"] ?? throw new ArgumentException("filePath is required");
-      var content = args?["content"] ?? throw new ArgumentException("content is required");
+      var filePath = GetStringArgument(arguments, "filePath");
+      var content = GetStringArgument(arguments, "content");
+
+      Console.WriteLine($"Writing file at: {filePath}");
 
       var directory = Path.GetDirectoryName(filePath);
       if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -1031,50 +1283,46 @@ public class ChatDemo
 
    private static async Task<object> ScanFolderAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
-      var folderPath = args?["folderPath"] ?? throw new ArgumentException("folderPath is required");
+      // JsonElement, not string: the model sometimes sends extra numeric
+      // arguments (e.g. maxDepth) that would fail string deserialization
+      var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(arguments);
+      var folderPath = args is not null
+          && args.TryGetValue("folderPath", out var folderElement)
+          && folderElement.ValueKind == JsonValueKind.String
+              ? folderElement.GetString()
+              : null;
+
+      if (string.IsNullOrEmpty(folderPath))
+         throw new ArgumentException("folderPath is required");
+
+      Console.WriteLine($"Scanning folder tree at: {folderPath}");
 
       if (!Directory.Exists(folderPath))
          throw new DirectoryNotFoundException($"Directory not found: {folderPath}");
 
-      var files = new List<MistralAi.Agents.Models.FileInfo>();
-      var directories = new List<MistralAi.Agents.Models.DirectoryInfo>();
+      // ASCII listing, matching scan_folder_tree's style: directories first
+      // with a trailing '/', then files with byte sizes.
+      var sb = new System.Text.StringBuilder();
+      sb.AppendLine($"Folder: {folderPath}");
 
-      foreach (var file in Directory.GetFiles(folderPath))
+      foreach (var dir in Directory.GetDirectories(folderPath).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+         sb.AppendLine($"+-- {new System.IO.DirectoryInfo(dir).Name}/");
+
+      foreach (var file in Directory.GetFiles(folderPath).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
       {
          var fileInfo = new System.IO.FileInfo(file);
-         files.Add(new MistralAi.Agents.Models.FileInfo
-         {
-            Name = fileInfo.Name,
-            Path = fileInfo.FullName,
-            Size = fileInfo.Length,
-            LastModified = fileInfo.LastWriteTime
-         });
+         sb.AppendLine($"     {fileInfo.Name} ({fileInfo.Length} bytes)");
       }
 
-      foreach (var dir in Directory.GetDirectories(folderPath))
-      {
-         var dirInfo = new System.IO.DirectoryInfo(dir);
-         directories.Add(new MistralAi.Agents.Models.DirectoryInfo
-         {
-            Name = dirInfo.Name,
-            Path = dirInfo.FullName,
-            LastModified = dirInfo.LastWriteTime
-         });
-      }
-
-      return new FolderScanResult
-      {
-         Path = folderPath,
-         Files = files,
-         Directories = directories
-      };
+      sb.AppendLine($"{Directory.GetDirectories(folderPath).Length} directories, {Directory.GetFiles(folderPath).Length} files.");
+      return sb.ToString();
    }
 
    private static async Task<object> DeleteFileAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
-      var filePath = args?["filePath"] ?? throw new ArgumentException("filePath is required");
+      var filePath = GetStringArgument(arguments, "filePath");
+
+      Console.WriteLine($"Deleting file at: {filePath}");
 
       Console.Write($"Delete file: {filePath} y/n");
       if (Console.ReadLine()?.Trim().ToLower() != "y")
@@ -1091,8 +1339,7 @@ public class ChatDemo
 
    private static async Task<object> DeleteFolderAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
-      var folderPath = args?["folderPath"] ?? throw new ArgumentException("folderPath is required");
+      var folderPath = GetStringArgument(arguments, "folderPath");
 
       Console.Write($"Delete folder {folderPath} y/n");
       if (Console.ReadLine()?.Trim().ToLower() != "y")
@@ -1109,8 +1356,9 @@ public class ChatDemo
 
    private static async Task<object> CreateFolderAsync(string arguments)
    {
-      var args = JsonSerializer.Deserialize<Dictionary<string, string>>(arguments);
-      var folderPath = args?["folderPath"] ?? throw new ArgumentException("folderPath is required");
+      var folderPath = GetStringArgument(arguments, "folderPath");
+
+      Console.WriteLine($"Creating folder at: {folderPath}");
 
       Directory.CreateDirectory(folderPath);
       return new FileOperationResult { Success = true };

@@ -15,6 +15,9 @@ public class MistralAiService : IMistralAiService
    public MistralAiService(HttpClient httpClient)
    {
       _httpClient = httpClient;
+      // Streaming agent turns legitimately run for minutes; the old 90s cap
+      // timed out mid-generation. Cancellation is owned by the caller instead.
+      _httpClient.Timeout = Timeout.InfiniteTimeSpan;
       _jsonOptions = new JsonSerializerOptions
       {
          PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,

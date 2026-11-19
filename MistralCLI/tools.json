@@ -3,16 +3,20 @@
       "Type": 0,
       "Function": {
          "Name": "read_text_file",
-         "Description": "Read the content of a text file",
+         "Description": "Read the content of one or more text files. Pass filePaths (an array) to read all files you need in a single call - strongly preferred over multiple single-file calls.",
          "Parameters": {
             "type": "object",
             "properties": {
                "filePath": {
                   "type": "string",
-                  "description": "The path to the file to read"
+                  "description": "The path to a single file to read (or use filePaths)"
+               },
+               "filePaths": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Paths of multiple files to read in one call"
                }
-            },
-            "required": [ "filePath" ]
+            }
          }
       }
    },
@@ -41,7 +45,7 @@
       "Type": 0,
       "Function": {
          "Name": "scan_folder",
-         "Description": "Scan a folder and list its contents",
+         "Description": "List the contents of a single folder as a compact ASCII listing: directories first (ending with '/'), then files with byte sizes. Use this to expand a subfolder mentioned in a truncated scan_folder_tree result.",
          "Parameters": {
             "type": "object",
             "properties": {
@@ -109,7 +113,7 @@
       "Type": 0,
       "Function": {
          "Name": "scan_folder_tree",
-         "Description": "Scan a folder and return a hierarchical file tree structure. Supports breadth-first and depth-first scanning modes.",
+         "Description": "Scan a folder and return a compact indented text tree of files and folders (directories end with '/'). Output is capped at 400 entries; if truncated, call scan_folder on a subfolder to expand it.",
          "Parameters": {
             "type": "object",
             "properties": {
@@ -126,7 +130,7 @@
                "maxDepth": {
                   "type": "integer",
                   "description": "Maximum depth to scan (0 = root only, 1 = root + immediate children, etc.)",
-                  "default": 10,
+                  "default": 4,
                   "minimum": 0
                },
                "filePatterns": {

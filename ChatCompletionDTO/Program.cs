@@ -24,6 +24,10 @@ var messages = new List<MessageBase> { systemMessage };
 Console.WriteLine("Mistral AI Chat Client (Enter blank line to exit)");
 Console.WriteLine("-----------------------------------------------");
 
+string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-api-openapi.yaml");
+
+messages.Add(new UserMessage { Content = yaml });
+
 while (true)
 {
    Console.Write("You: ");
@@ -34,10 +38,6 @@ while (true)
 
    // Add user message to conversation
    messages.Add(new UserMessage { Content = userInput });
-
-   string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-api-openapi.yaml");
-
-   messages.Add(new UserMessage { Content = yaml });
 
    try
    {

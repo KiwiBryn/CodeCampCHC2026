@@ -8,6 +8,7 @@
     <File Path="Fiddler/responseACID.md" />
     <File Path="Fiddler/ResponseCode.txt" />
     <File Path="Notes.txt" />
+    <File Path="Request422.json" />
   </Folder>
   <Project Path="ChatCompletionDTO/3.ChatCompletionDTO.csproj" Id="cc47d51f-ef4a-4dca-996b-ff99fcbfda0e" />
   <Project Path="ChatCompletionFiddler/2.ChatCompletionFiddler.csproj" Id="f63aeda2-1b57-4063-81a2-8261f3687a32" />

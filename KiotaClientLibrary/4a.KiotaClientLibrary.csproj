@@ -14,4 +14,10 @@
     <PackageReference Include="Microsoft.Kiota.Serialization.Text" Version="2.1.6" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="mistral-ai-chat-completions-openapi.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

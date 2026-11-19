@@ -31,19 +31,26 @@ public class ChatDemo(IMistralAiService mistralService)
 
       var request = new ChatCompletionRequest
       {
-         Model = "mistral-large-latest",
+         Model = "mistral-small-latest",
          Messages =
           [
-              new ChatMessage { Role = MessageRole.System, Content = "You are a helpful assistant." },
-              new ChatMessage { Role = MessageRole.User, Content = "What is the capital of France?" }
+              new ChatMessage { Role = MessageRole.System, Content = "You are a helpful, concise assistant that provides accurate information.\r\nIf you do not know the answer, say so rather than making something up.\r\nKeep responses brief and to the point." },
+              new ChatMessage { Role = MessageRole.User, Content = "Explain the software development concept SOLID" }
           ],
          Temperature = 0.7f,
-         MaxTokens = 100
+         //MaxTokens = 100
+         MaxTokens = 1024
       };
 
+      Console.WriteLine();
       var response = await mistralService.CreateChatCompletionAsync(request);
       Console.WriteLine($"Response: {response.Choices[0].Message.Content}");
+
+      Console.WriteLine();
       Console.WriteLine($"Usage: {response.Usage?.TotalTokens} tokens");
+      Console.WriteLine("<ENTER> to continue...");
+      Console.ReadLine();
+      Console.WriteLine();
    }
 
    private async Task StreamingChatCompletionAsync()
@@ -52,13 +59,14 @@ public class ChatDemo(IMistralAiService mistralService)
 
       var request = new ChatCompletionRequest
       {
-         Model = "mistral-large-latest",
+         Model = "mistral-small-latest",
          Messages =
           [
-              new ChatMessage { Role = MessageRole.User, Content = "Write a short poem about the ocean." }
+              new ChatMessage { Role = MessageRole.User, Content = "Explain the software development concept SOLID" }
           ],
          Temperature = 0.9f,
-         MaxTokens = 200
+         //MaxTokens = 200
+         MaxTokens = 2048
       };
 
 
@@ -70,6 +78,9 @@ public class ChatDemo(IMistralAiService mistralService)
          }
       }
 
+      Console.WriteLine();
+      Console.Write("<ENTER> to continue...");
+      Console.ReadLine();
       Console.WriteLine();
    }
 
@@ -133,13 +144,14 @@ public class ChatDemo(IMistralAiService mistralService)
 
       var request = new ChatCompletionRequest
       {
-         Model = "mistral-large-latest",
+         Model = "mistral-small-latest",
+         MaxTokens = 1024,
          Messages =
           [
               new ChatMessage
                 {
                     Role = MessageRole.User,
-                    Content = "What's the weather like in Paris?"
+                    Content = "What is what is the weather in Christchurch New Zealand?"
                 }
           ],
          Tools = tools,
@@ -149,6 +161,7 @@ public class ChatDemo(IMistralAiService mistralService)
       var response = await mistralService.CreateChatCompletionAsync(request);
       if (response.Choices[0].Message.ToolCalls is { Count: > 0 })
       {
+         Console.WriteLine();
          Console.WriteLine("Model requested tool calls:");
          foreach (var toolCall in response.Choices[0].Message.ToolCalls)
          {
@@ -159,5 +172,10 @@ public class ChatDemo(IMistralAiService mistralService)
       {
          Console.WriteLine($"Response: {response.Choices[0].Message.Content}");
       }
+
+      Console.WriteLine();
+      Console.WriteLine($"Token Usage: {response.Usage?.TotalTokens} tokens");
+      Console.WriteLine("<ENTER> to continue...");
+      Console.ReadLine();
    }
 }

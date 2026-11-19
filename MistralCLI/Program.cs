@@ -37,5 +37,42 @@ var host = Host.CreateDefaultBuilder(args)
     })
     .Build();
 
+// --- Working directory resolution --------------------------------------
+// The agent should operate on your project, not on bin\Debug\net10.0 (which
+// is where it lands when you launch the built exe). Two ways to control it:
+//   1. "WorkingDirectory" in appsettings.json (or --WorkingDirectory on the
+//      command line / WorkingDirectory=... env var, since the host binds all
+//      three). Ideal for demos: point it at the repo or project you want live.
+//   2. Auto-detection: if unset, walk up from wherever we started until a
+//      .csproj appears and use that folder.
+// This must run before ChatDemo is resolved: its constructor records the
+// working directory in the system prompt.
+var configuration = host.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+var configuredWorkingDirectory = configuration["WorkingDirectory"];
+
+if (!string.IsNullOrWhiteSpace(configuredWorkingDirectory))
+{
+   var workingDirectory = Path.GetFullPath(configuredWorkingDirectory);
+   if (!Directory.Exists(workingDirectory))
+      throw new DirectoryNotFoundException($"Configured WorkingDirectory not found: {workingDirectory}");
+
+   Directory.SetCurrentDirectory(workingDirectory);
+}
+else
+{
+   // Auto-detect: climb from the current directory until we find a .csproj
+   var dir = new System.IO.DirectoryInfo(Directory.GetCurrentDirectory());
+   while (dir is not null
+       && dir.GetFiles("*.csproj", SearchOption.TopDirectoryOnly).Length == 0)
+   {
+      dir = dir.Parent;
+   }
+
+   if (dir is not null && dir.FullName != Directory.GetCurrentDirectory())
+      Directory.SetCurrentDirectory(dir.FullName);
+}
+
+Console.WriteLine($"Working directory: {Directory.GetCurrentDirectory()}");
+
 var demo = host.Services.GetRequiredService<ChatDemo>();
 await demo.RunAsync();
