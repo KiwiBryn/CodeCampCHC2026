@@ -20,7 +20,7 @@ public class MistralService : IMistralService
       _apiKey = configuration["MISTRAL_API_KEY"]
           ?? throw new InvalidOperationException("MISTRAL_API_KEY environment variable is not set");
 
-      _defaultModel = configuration["MISTRAL_MODEL"] ?? "mistral-large-latest";
+      _defaultModel = configuration["MISTRAL_MODEL"] ?? "mistral-small-latest";
 
       _httpClient.BaseAddress = new Uri("https://api.mistral.ai/v1/");
       _httpClient.DefaultRequestHeaders.Authorization =
