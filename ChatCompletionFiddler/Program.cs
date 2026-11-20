@@ -46,101 +46,101 @@ public record Usage(
 
 class Program
 {
-   private static readonly HttpClient _httpClient = new();
-   private const string ApiUrl = "https://api.mistral.ai/v1/chat/completions";
-   private const string DefaultModel = "mistral-small-latest";
-   private const string SystemMessageFile = "system.md";
+    private static readonly HttpClient _httpClient = new();
+    private const string ApiUrl = "https://api.mistral.ai/v1/chat/completions";
+    private const string DefaultModel = "mistral-small-latest";
+    private const string SystemMessageFile = "system.md";
 
-   static async Task Main(string[] args)
-   {
-      // Validate API key
-      var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY");
-      if (string.IsNullOrEmpty(apiKey))
-      {
-         Console.Error.WriteLine("MISTRAL_API_KEY environment variable is not set.");
-         return;
-      }
+    static async Task Main(string[] args)
+    {
+        // Validate API key
+        var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY");
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            Console.Error.WriteLine("MISTRAL_API_KEY environment variable is not set.");
+            return;
+        }
 
-      // Get model from environment or use default
-      var model = Environment.GetEnvironmentVariable("MISTRAL_MODEL") ?? DefaultModel;
+        // Get model from environment or use default
+        var model = Environment.GetEnvironmentVariable("MISTRAL_MODEL") ?? DefaultModel;
 
-      // Load system message
-      string systemMessage;
-      try
-      {
-         systemMessage = await File.ReadAllTextAsync(SystemMessageFile);
-      }
-      catch (FileNotFoundException)
-      {
-         Console.Error.WriteLine($"System message file '{SystemMessageFile}' not found.");
-         return;
-      }
+        // Load system message
+        string systemMessage;
+        try
+        {
+            systemMessage = await File.ReadAllTextAsync(SystemMessageFile);
+        }
+        catch (FileNotFoundException)
+        {
+            Console.Error.WriteLine($"System message file '{SystemMessageFile}' not found.");
+            return;
+        }
 
-      // Configure HTTP client
-      _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        // Configure HTTP client
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
-      // Initialize conversation with system message
-      var messages = new List<ChatMessage>
+        // Initialize conversation with system message
+        var messages = new List<ChatMessage>
         {
             new("system", systemMessage)
         };
 
-      string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-openapi.yml");
+        //string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-openapi.yml");
 
-      messages.Add(new ChatMessage("user", yaml));
+        //messages.Add(new ChatMessage("user", yaml));
+     
+        Console.WriteLine($"Chat with {model} 2.ChantCOmpletionFiddler");
+        Console.WriteLine("Type your message and press Enter. Blank line to quit.");
 
-      Console.WriteLine($"Chat with {model} (Enter blank line to exit)");
-      Console.WriteLine("Type your message and press Enter...");
+        // Main input loop
+        while (true)
+        {
+            Console.Write("> ");
+            var userInput = Console.ReadLine();
 
-      // Main input loop
-      while (true)
-      {
-         Console.Write("> ");
-         var userInput = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(userInput))
+                break;
 
-         if (string.IsNullOrWhiteSpace(userInput))
-            break;
+            // Add user message to conversation
+            messages.Add(new ChatMessage("user", userInput));
 
-         // Add user message to conversation
-         messages.Add(new ChatMessage("user", userInput));
-
-         try
-         {
-            // Call API
-            var request = new ChatCompletionRequest(
-                Model: model,
-                Temperature: 0.75f,
-                MaxTokens: 5000,
-                Stream: false, // Messages to big and were truncated, so we set stream to true
-                Messages: messages.ToArray()
-            );
-
-            var response = await _httpClient.PostAsJsonAsync(ApiUrl, request);
-            response.EnsureSuccessStatusCode();
-
-            var completion = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>();
-
-            if (completion?.Choices?.FirstOrDefault()?.Message?.Content is { } assistantMessage)
+            try
             {
-               // Add assistant response to conversation
-               messages.Add(new ChatMessage("assistant", assistantMessage));
+                // Call API
+                var request = new ChatCompletionRequest(
+                    Model: model,
+                    Temperature: 0.75f,
+                    MaxTokens: 5000,
+                    Stream: false, // Messages to big and were truncated, so we set stream to true
+                    Messages: messages.ToArray()
+                );
 
-               Console.WriteLine();
-               Console.WriteLine(assistantMessage);
-               Console.WriteLine();
+                var response = await _httpClient.PostAsJsonAsync(ApiUrl, request);
+                response.EnsureSuccessStatusCode();
+
+                var completion = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>();
+
+                if (completion?.Choices?.FirstOrDefault()?.Message?.Content is { } assistantMessage)
+                {
+                    // Add assistant response to conversation
+                    messages.Add(new ChatMessage("assistant", assistantMessage));
+
+                    Console.WriteLine();
+                    Console.WriteLine(assistantMessage);
+                    Console.WriteLine();
+                }
+
+                if (completion?.Usage is { } usage)
+                {
+                    Console.WriteLine($"Tokens used: Prompt={usage.PromptTokens}, Completion={usage.CompletionTokens}, Total={usage.TotalTokens}");
+                }
             }
-
-            if (completion?.Usage is { } usage)
+            catch (Exception ex)
             {
-               Console.WriteLine($"Tokens used: Prompt={usage.PromptTokens}, Completion={usage.CompletionTokens}, Total={usage.TotalTokens}");
+                Console.Error.WriteLine($"Error: {ex.Message}");
             }
-         }
-         catch (Exception ex)
-         {
-            Console.Error.WriteLine($"Error: {ex.Message}");
-         }
-      }
-   }
+        }
+    }
 }
 
 /*
