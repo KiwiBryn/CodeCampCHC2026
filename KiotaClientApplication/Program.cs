@@ -14,12 +14,16 @@ var adapter = new HttpClientRequestAdapter(
 var client = new MistralChatCompletionClient(adapter);
 
 
+Console.WriteLine($"Chat  4b.KiotaApplication");
+Console.WriteLine("Type a message and press Enter. Blank line to quit.");
+string prompt = Console.ReadLine();
+
 var request = new ChatCompletionRequest
 {
-   //Model = "mistral-large-latest",
-   Model = "mistral-small-latest",
+    //Model = "mistral-large-latest",
+    Model = "mistral-small-latest",
 
-   Messages =
+    Messages =
     [
       new ChatCompletionRequest.ChatCompletionRequest_messages
         {
@@ -39,17 +43,18 @@ var request = new ChatCompletionRequest
                 Content = new UserMessage.UserMessage_content
                 {
                     //String = "Generate a console application that displays \"hello world\""
-                    String = "Generate a minimalAPI application which returned the weather for a given location"
+                    //String = "Generate a minimalAPI application which returned the weather for a given location"
+                    String = prompt
                 }
             }
         },
    ],
-   ToolChoice = new ChatCompletionRequest.ChatCompletionRequest_tool_choice
-   {
-      ToolChoiceEnum = ToolChoiceEnum.Auto
-   },
+    ToolChoice = new ChatCompletionRequest.ChatCompletionRequest_tool_choice
+    {
+        ToolChoiceEnum = ToolChoiceEnum.Auto
+    },
 
-   Tools = new List<CustomConnector>
+    Tools = new List<CustomConnector>
    {
      new CustomConnector
         {
@@ -75,7 +80,7 @@ var request = new ChatCompletionRequest
                     }
                 }
             }
-        } 
+        }
    }
 };
 
