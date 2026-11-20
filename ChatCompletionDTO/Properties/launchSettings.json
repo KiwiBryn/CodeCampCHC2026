@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "3.ChatCompletionDTO": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "MISTRAL_MODEL": "mistral-small-latest"
+      }
+    }
+  }
+}
