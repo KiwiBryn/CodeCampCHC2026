@@ -16,16 +16,24 @@ var client = new MistralChatCompletionClient(adapter);
 
 Console.WriteLine($"Chat  4b.KiotaApplication");
 Console.WriteLine("Type a message and press Enter. Blank line to quit.");
-string prompt = Console.ReadLine();
 
-var request = new ChatCompletionRequest
+while (true)
 {
-    //Model = "mistral-large-latest",
-    Model = "mistral-small-latest",
+    Console.Write(">");
+    string prompt = Console.ReadLine();
+    if (String.IsNullOrEmpty(prompt))
+    {
+        break;
+    }
 
-    Messages =
-    [
-      new ChatCompletionRequest.ChatCompletionRequest_messages
+    var request = new ChatCompletionRequest
+    {
+        //Model = "mistral-large-latest",
+        Model = "mistral-small-latest",
+
+        Messages =
+        [
+          new ChatCompletionRequest.ChatCompletionRequest_messages
         {
             SystemMessage = new SystemMessage
             {
@@ -49,12 +57,12 @@ var request = new ChatCompletionRequest
             }
         },
    ],
-    ToolChoice = new ChatCompletionRequest.ChatCompletionRequest_tool_choice
-    {
-        ToolChoiceEnum = ToolChoiceEnum.Auto
-    },
+        ToolChoice = new ChatCompletionRequest.ChatCompletionRequest_tool_choice
+        {
+            ToolChoiceEnum = ToolChoiceEnum.Auto
+        },
 
-    Tools = new List<CustomConnector>
+        Tools = new List<CustomConnector>
    {
      new CustomConnector
         {
@@ -82,32 +90,32 @@ var request = new ChatCompletionRequest
             }
         }
    }
-};
+    };
 
-var response = await client
-    .V1
-    .Chat
-    .Completions
-    .PostAsync(request);
+    var response = await client
+        .V1
+        .Chat
+        .Completions
+        .PostAsync(request);
 
 
-foreach (var choice in response.Choices ?? new List<ChatCompletionChoice>())
-{
-   if (choice.Message?.Content?.String is not null)
-   {
-      Console.WriteLine(choice.Message.Content.String);
-   }
+    foreach (var choice in response.Choices ?? new List<ChatCompletionChoice>())
+    {
+        if (choice.Message?.Content?.String is not null)
+        {
+            Console.WriteLine(choice.Message.Content.String);
+        }
 
-   foreach (var contentChunk in choice?.Message?.Content?.ContentChunk ?? new List<ContentChunk>())
-   {
-      foreach (var additionalData in contentChunk.AdditionalData ?? new Dictionary<string, object>())
-      {
-         Console.WriteLine($"{additionalData.Key} {additionalData.Value}");
-      }
-   }
+        foreach (var contentChunk in choice?.Message?.Content?.ContentChunk ?? new List<ContentChunk>())
+        {
+            foreach (var additionalData in contentChunk.AdditionalData ?? new Dictionary<string, object>())
+            {
+                Console.WriteLine($"{additionalData.Key} {additionalData.Value}");
+            }
+        }
 
-   Console.WriteLine($"Token Usage: {response.Usage?.PromptTokens} {response.Usage?.CompletionTokens} {response.Usage?.TotalTokens}");
+        Console.WriteLine($"Token Usage Prompt: {response.Usage?.PromptTokens} Completion: {response.Usage?.CompletionTokens} Total: {response.Usage?.TotalTokens}");
+    }
 }
-
 Console.WriteLine("Press any key to exit...");
 Console.ReadKey();
