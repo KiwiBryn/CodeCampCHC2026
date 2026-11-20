@@ -64,7 +64,7 @@ public class ChatDemo
 
          // Load previous context first so default skills are applied on top of it
          // (loading it afterwards would overwrite the skills' messages and settings)
-         await LoadContextAsync();
+         //await LoadContextAsync();
 
          await LoadSkillsManifestAsync();
 
