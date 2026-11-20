@@ -21,12 +21,13 @@ var systemMessage = new SystemMessage { Content = systemMessageContent };
 // Initialize conversation with system message
 var messages = new List<MessageBase> { systemMessage };
 
-Console.WriteLine("Mistral AI Chat Client (Enter blank line to exit)");
-Console.WriteLine("-----------------------------------------------");
+Console.WriteLine($"Chat  3.ChantCompletionDTO");
+Console.WriteLine("Type a message and press Enter. Blank line to quit.");
 
-string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-api-openapi.yaml");
 
-messages.Add(new UserMessage { Content = yaml });
+//string yaml = await File.ReadAllTextAsync("mistral-ai-chat-completions-api-openapi.yaml");
+
+//messages.Add(new UserMessage { Content = yaml });
 
 while (true)
 {
