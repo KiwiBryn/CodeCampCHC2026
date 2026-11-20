@@ -25,8 +25,8 @@
 //
 // Configuration
 const string Endpoint = "https://api.mistral.ai/v1/chat/completions";
-//const string DefaultModel = "mistral-small-latest"; // BHL
-const string DefaultModel = "mistral-medium-latest"; // BHL
+const string DefaultModel = "mistral-small-latest"; // BHL
+//const string DefaultModel = "mistral-medium-latest"; // BHL
 //const string DefaultModel = "mistral-large-latest"; // BHL
 //const string DefaultModel = "codestral-latest"; // BHL
 
@@ -42,7 +42,7 @@ http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("appli
 
 var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-Console.WriteLine($"Mistral chat ({model})");
+Console.WriteLine($"Mistral chat ({model}) 1.FiddlerChatCompletionAPI");
 Console.WriteLine("Type a message and press Enter. Blank line to quit.");
 Console.WriteLine();
 
