@@ -5,8 +5,8 @@ using Microsoft.Kiota.Http.HttpClientLibrary;
 using Mistral;
 using Mistral.Models;
 
-var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY")
-    ?? throw new InvalidOperationException("MISTRAL_API_KEY not configured.");
+var apiKey = Environment.GetEnvironmentVariable("FOEHN_API_KEY")
+    ?? throw new InvalidOperationException("FOEHN_API_KEY not configured.");
 
 var adapter = new HttpClientRequestAdapter(
     new BearerAuthenticationProvider(apiKey));

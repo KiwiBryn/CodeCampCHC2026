@@ -54,15 +54,15 @@ class Program
     static async Task Main(string[] args)
     {
         // Validate API key
-        var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY");
+        var apiKey = Environment.GetEnvironmentVariable("FOEHN_API_KEY");
         if (string.IsNullOrEmpty(apiKey))
         {
-            Console.Error.WriteLine("MISTRAL_API_KEY environment variable is not set.");
+            Console.Error.WriteLine("FOEHN_API_KEY environment variable is not set.");
             return;
         }
 
         // Get model from environment or use default
-        var model = Environment.GetEnvironmentVariable("MISTRAL_MODEL") ?? DefaultModel;
+        var model = Environment.GetEnvironmentVariable("FOEHN_MODEL") ?? DefaultModel;
 
         // Load system message
         string systemMessage;
@@ -150,8 +150,8 @@ class Program
 1. * *Correct Case DTOs**: All request and response DTOs use the exact JSON property names from the Mistral API with `JsonPropertyName` attributes.
 
 2. **Environment Variables**:
-   -Requires `MISTRAL_API_KEY` to be set
-   - Optionally uses `MISTRAL_MODEL` (defaults to "mistral-medium-latest")
+   -Requires `FOEHN_API_KEY` to be set
+   - Optionally uses `FOEHN_MODEL` (defaults to "mistral-medium-latest")
 
 3. **System Message**:
    -Loads from `system.md` file in the application directory

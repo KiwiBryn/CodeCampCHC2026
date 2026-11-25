@@ -30,10 +30,10 @@ const string DefaultModel = "mistral-small-latest"; // BHL
 //const string DefaultModel = "mistral-large-latest"; // BHL
 //const string DefaultModel = "codestral-latest"; // BHL
 
-var apiKey = Environment.GetEnvironmentVariable("MISTRAL_API_KEY")
-   ?? throw new InvalidOperationException("Set the MISTRAL_API_KEY environment variable.");
+var apiKey = Environment.GetEnvironmentVariable("FOEHN_API_KEY")
+   ?? throw new InvalidOperationException("Set the FOEHN_API_KEY environment variable.");
 
-var model = Environment.GetEnvironmentVariable("MISTRAL_MODEL") ?? DefaultModel;
+var model = Environment.GetEnvironmentVariable("FOEHN_MODEL") ?? DefaultModel;
 
 using var http = new HttpClient();
 

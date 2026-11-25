@@ -19,11 +19,11 @@ var host = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices((context, services) =>
     {
-       var apiKey = context.Configuration["MistralAi:ApiKey"];
+       var apiKey = context.Configuration["Foehn:ApiKey"];
        if (string.IsNullOrWhiteSpace(apiKey))
        {
           throw new InvalidOperationException(
-              "MistralAi:ApiKey is not configured. Set it using Manage User Secrets or the MistralAi__ApiKey environment variable.");
+              "Foehn:ApiKey is not configured. Set it using Manage User Secrets or the Foehn__ApiKey environment variable.");
        }
 
        services.AddHttpClient<IMistralAiService, MistralAiService>(client =>
