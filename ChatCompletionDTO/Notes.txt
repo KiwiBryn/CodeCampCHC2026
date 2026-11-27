@@ -1,5 +1,11 @@
 ﻿Getting easier to get to build.
 
+# Set permanently for your user account
+[System.Environment]::SetEnvironmentVariable("FOEHN_API_KEY", "sk-your-key-here", "User")
+
+# Set permanently system-wide (requires admin)
+[System.Environment]::SetEnvironmentVariable("FOEHN_API_KEY", "sk-your-key-here", "Machine")
+
 Don't know why by generated code had System.md
 
 Added guidance to system.md to use You are a helpful, concise assistant that provides accurate information.
